@@ -25,12 +25,14 @@ from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, La
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+import shap
+
 
 
 st.set_page_config(page_title="Rehab Strength APP", layout="wide")
 st.title("🏋️‍♂️ Rehab Strength APP", text_alignment="center")
 st.caption("Workouts (Strong) • Sleep (Sheets) • Recovery (Sigmoid)")
-app_version = "V2.3.2"
+app_version = "V2.3.3"
 st.caption(f"App Version: {app_version} • Updated: {datetime.now():%Y-%m-%d %H:%M}")
 st.markdown("---")
 
@@ -1499,12 +1501,12 @@ with tab6:
             st.error(f"Predictor column '{col}' not found in data.")
             st.stop()
 
-    types = st.selectbox(f"Select algorithm to solve:", options=["Regression", "Categorical"], key=f"algorithm_type_solver")
+    types = st.selectbox(f"Select algorithm to solve:", options=["Regression", "Categorical", "Unsupervised"], key=f"algorithm_type_solver")
     if types == "Regression":
         models = st.segmented_control(
             "Select Model Type:",
-            ["Linear Regression", "Elastic Net", "Ridge Regression", "Lasso", "Decision Tree Regressor", "Random Forest Regressor"], key="model_type_control", default="Linear Regression")
-        if models == "Linear Regression":    #Linear Regression Selected
+            ["OLS diagnosis", "Other Linear Models", "Non Linear Models", "Bagging & Boosting Models"], key="model_type_control", default="OLS diagnosis")
+        if models == "OLS diagnosis":    #Linear Regression Selected
                 #------------------------------FROZEN MODEL CONDITIONALS-----------------------------
             if "model_frozen" not in st.session_state:
                 st.session_state.model_frozen = None
@@ -2110,7 +2112,7 @@ with tab6:
                             st.pyplot(fig)
                     
             # ------------------------------FROZEN MODEL DEPLOYMENT PHASE-----------------------------
-            elif (st.session_state.model_frozen is None) and (n >= 200):
+            elif (st.session_state.model_frozen is None) and (n >= 300):
                 st.success("MODEL READY FOR DEPLOYMENT (FREEZING NOW)", icon="✅")
                 freeze_date = df_model.iloc[199]["Date"]  # Freeze after first 200 samples (0-199)
                 frozen_df = df_model[df_model["Date"] <= freeze_date].copy()
@@ -2172,672 +2174,460 @@ with tab6:
                         ax.set_title("Post-freeze residuals over time")
                         ax.tick_params(axis='x', rotation=45)
                         st.pyplot(fig)
-        #------------------------------ELASCTIC NET-----------------------------------------------------------
-        elif models == "Elastic Net":   #Toggle Elastic Net Selected
-            if models == "Elastic Net":  
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
 
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
 
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
-                    #------------------------------FROZEN MODEL CONDITIONALS-----------------------------
-                if "model_frozen" not in st.session_state:
-                    st.session_state.model_frozen = None
-                if "freeze_date" not in st.session_state:
-                    st.session_state.freeze_date = None
-                if "freeze_predictors" not in st.session_state:
-                    st.session_state.freeze_predictors = None
-                n = df_model.shape[0]
-                if st.session_state.model_frozen is not None:
-                    if st.button("Reset frozen model (session)"):
-                        st.session_state.model_frozen = None
-                        st.session_state.freeze_date = None
-                        st.session_state.freeze_predictors = None
-                        st.rerun()
-            #------------------------------ENET TRAINING PHASE-----------------------------
-            if (st.session_state.model_frozen is None) and (n < 200):
-                st.warning("MODEL ON TRAINING PHASE YET",icon="spinner")
-                tscv = TimeSeriesSplit(n_splits=5, gap=2)
-                alphas = np.logspace(-3, 3, 300)
-                l1_ratios = np.linspace(0.1, 1, 10)
-                    
-                enet = ElasticNet(max_iter=10000)
+        elif models == "Other Linear Models":
+            def fit_reg_linear_models(df, X_train, y_train, X_test, y_test):
 
-                pipeline_enet = Pipeline([
+                """ 
+                Fit OLS, Ridge, Lasso, and ElasticNet regression models with polynomial features and scaling.
+                ------------
+                Parameters:
+                df: pd.DataFrame - Full dataframe 
+                X_train: pd.DataFrame - Training features
+                y_train: pd.Series - Training target
+                X_test: pd.DataFrame - Testing features
+                y_test: pd.Series - Testing target
+                ------------
+                Returns:
+                dict - Dictionary of model name to fitted model and performance metrics
+                """
+                results = []
+                # ------------------OLS with Polynomial Features------------------
+                pipe_ols = Pipeline([
                     ("scaler", StandardScaler()),
                     ("poly", PolynomialFeatures(degree=2)),
-                    ("enet", enet)
+                    ("ols", LinearRegression())
                 ])
-
-                grid_enet = GridSearchCV(
-                    pipeline_enet,
-                    param_grid={"enet__alpha": alphas, "enet__l1_ratio": l1_ratios},
-                    cv=tscv,
-                    scoring="neg_mean_squared_error",
-                    verbose=True
-                )
-                grid_enet.fit(X_train, y_train)
-
-                y_pred_train_enet = grid_enet.predict(X_train)
-                y_pred_test_enet = grid_enet.predict(X_test)
-
-                    # ----------------------------- PERFORMANCE METRICS -----------------------------
-                r2_train_enet = r2_score(y_train, y_pred_train_enet)
-                r2_test_enet = r2_score(y_test, y_pred_test_enet)
-                mse_train_enet = mean_squared_error(y_train, y_pred_train_enet)
-                mse_test_enet = mean_squared_error(y_test, y_pred_test_enet)
-                mae_train_enet = mean_absolute_error(y_train, y_pred_train_enet)
-                mae_test_enet = mean_absolute_error(y_test, y_pred_test_enet)
-                rmse_train_enet = np.sqrt(mse_train_enet)
-                rmse_test_enet = np.sqrt(mse_test_enet)
-
-                with st.expander(" Model Metrics", expanded=True):
-                    st.subheader("📈 Train Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                    with c1:
-                        st.metric("Train R²", f"{r2_train_enet:.3f}")
-                    with c2:
-                        st.metric("MSE", f"{mse_train_enet:.3f}")
-                    with c3:
-                        st.metric("MAE", f"{mae_train_enet:.3f}")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_train_enet:.3f}")
-                    with c5:
-                        st.metric("Samples", f"{train_df.shape[0]}")
-                    with c6:
-                        st.metric("Training Start Date", f"{train_df.Date.min().date()}")
-
-                    st.subheader("📉 Test Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                        
-                    with c1:
-                        st.metric("Test R²", f"{r2_test_enet:.3f}", delta=f"{r2_test_enet - r2_train_enet:.3f}", 
-                                delta_color="green" if r2_test_enet > r2_train_enet else "red")
-                    with c2:
-                        st.metric("MSE", f"{mse_test_enet:.3f}", delta=f"{mse_test_enet - mse_train_enet:.3f}", 
-                                delta_color="red" if mse_test_enet > mse_train_enet else "green",
-                                    help="Mean Squared Error (MSE): lower values indicate better fit.\
-                                        Penalizes larger errors more heavily.")
-                    with c3:
-                        st.metric("MAE", f"{mae_test_enet:.3f}", delta=f"{mae_test_enet - mae_train_enet:.3f}", 
-                                    delta_color="red" if mae_test_enet > mae_train_enet else "green",
-                                    help="Mean Absolute Error (MAE): lower values indicate better fit.")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_test_enet:.3f}", delta=f"{rmse_test_enet - rmse_train_enet:.3f}", 
-                                    delta_color="red" if rmse_test_enet > rmse_train_enet else "green", 
-                                    help="Root Mean Squared Error (RMSE): lower values indicate better fit, in original units.")
-                    with c5:
-                        st.metric("Samples", f"{test_df.shape[0]}", help="The last 40 samples used for testing.")
-                    with c6:
-                        st.metric("Test Start Date", f"{test_df.Date.min().date()}")
-                with st.expander("📊 Model Insights", expanded=True):
-                    st.write("Best alpha:", round(grid_enet.best_params_["enet__alpha"], 4))
-                    st.write("Best l1_ratio:", round(grid_enet.best_params_["enet__l1_ratio"], 4))
-                    st.write("Selected features with non-zero coefficients:")
-                    best_enet = grid_enet.best_estimator_.named_steps["enet"]
-                    feature_names = grid_enet.best_estimator_.named_steps["poly"].get_feature_names_out(predictors)
-                    non_zero_features = [(name, coef) for name, coef in zip(feature_names, best_enet.coef_) if coef != 0]
-                    for name, coef in non_zero_features:
-                        st.write(f"{name}: {coef:.4f}")
-                    st.caption("Note: Elastic Net performs feature selection by shrinking some coefficients to zero. The features listed above are those that were retained in the final model after regularization.")
-            elif (st.session_state.model_frozen is None) and (n >= 200):
-                st.success("MODEL READY FOR DEPLOYMENT (FREEZING NOW)", icon="✅")
-                freeze_date = df_model.iloc[199]["Date"]  # Freeze after first 200 samples (0-199)
-                frozen_df = df_model[df_model["Date"] <= freeze_date].copy()
-
-                X_frozen = sm.add_constant(frozen_df[predictors])
-                y_frozen = frozen_df["Score"]
-
-                model_frozen = sm.OLS(y_frozen, X_frozen).fit(cov_type='HC3')
-
-                st.session_state.model_frozen = model_frozen
-                st.session_state.freeze_date = freeze_date
-                st.session_state.freeze_predictors = predictors.copy()
-
-                st.info(f"Frozen on {freeze_date.date()} New data after this will be monitored, not used for training.", icon="ℹ️")
-            #------------------------------ DEPLOYMENT & MONITORING -----------------------------
-            else:
-                if st.session_state.model_frozen is not None:
-                    st.success("MODEL DEPLOYED (SESSION-FROZEN)", icon="✅")
-                # Safety: predictors must match
-                if st.session_state.freeze_predictors != predictors:
-                    st.error("Predictors changed after model freeze. Please refresh/reset the model.")
-                    st.stop()
-
-                model_frozen = st.session_state.model_frozen
-                freeze_date = st.session_state.freeze_date
-
-                # Predict for all rows with the frozen model
-                X_all = sm.add_constant(df_model[predictors], has_constant="add")
-                df_model["yhat_frozen"] = model_frozen.predict(X_all)
-                df_model["resid_frozen"] = df_model["Score"] - df_model["yhat_frozen"]
-
-                # Split into in-sample (<= freeze) and live (> freeze)
-                live_df = df_model[df_model["Date"] > freeze_date].copy()
-
-                st.caption(f"Frozen on {freeze_date.date()} | Live samples: {len(live_df)}")
-
-                # Show latest prediction
-                last = df_model.sort_values("Date").iloc[-1]
-                st.metric("Latest predicted score", f"{last['yhat_frozen']:.2f}")
-
-                # Monitoring metrics on LIVE (post-freeze)
-                if len(live_df) >= 5:
-                    mae_live = mean_absolute_error(live_df["Score"], live_df["yhat_frozen"])
-                    rmse_live = np.sqrt(mean_squared_error(live_df["Score"], live_df["yhat_frozen"]))
-                    bias_live = live_df["resid_frozen"].mean()
-
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Live MAE", f"{mae_live:.2f}")
-                    c2.metric("Live RMSE", f"{rmse_live:.2f}")
-                    c3.metric("Live Bias", f"{bias_live:.2f}")
-                else:
-                    st.info("Not enough post-freeze samples yet for stable monitoring.")
-
-                # Plot live residual drift
-                with st.expander("📊 Monitoring: Live residuals", expanded=False):
-                    if len(live_df) > 0:
-                        fig, ax = plt.subplots(figsize=(10,4))
-                        sns.lineplot(data=live_df, x="Date", y="resid_frozen", ax=ax)
-                        ax.axhline(0, color="red", linestyle="--")
-                        ax.set_title("Post-freeze residuals over time")
-                        ax.tick_params(axis='x', rotation=45)
-                        st.pyplot(fig)
-            #------------------------------Ridge TRAINING PHASE-----------------------------
-        elif models == "Ridge Regression":   #Toggle Ridge Selected
-            if models == "Ridge Regression":  
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
-
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
-
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
-                    #------------------------------FROZEN MODEL CONDITIONALS-----------------------------
-                if "model_frozen" not in st.session_state:
-                    st.session_state.model_frozen = None
-                if "freeze_date" not in st.session_state:
-                    st.session_state.freeze_date = None
-                if "freeze_predictors" not in st.session_state:
-                    st.session_state.freeze_predictors = None
-                n = df_model.shape[0]
-                if st.session_state.model_frozen is not None:
-                    if st.button("Reset frozen model (session)"):
-                        st.session_state.model_frozen = None
-                        st.session_state.freeze_date = None
-                        st.session_state.freeze_predictors = None
-                        st.rerun()
-            #------------------------------Ridge TRAINING PHASE-----------------------------
-            if (st.session_state.model_frozen is None) and (n < 200):
-                st.warning("MODEL ON TRAINING PHASE YET",icon="spinner")
-                ridge = Ridge()
-                tscv = TimeSeriesSplit(n_splits=5, gap=2)
-                alphas = np.logspace(-3, 3, 300)
-                grid_ridge = GridSearchCV(
-                    ridge,
-                    {"alpha": alphas},
-                    cv=tscv,
-                    scoring="neg_mean_squared_error"
-                )
-                grid_ridge.fit(X_train, y_train)
-                pipeline_ridge = Pipeline([
+                best_ols = pipe_ols.fit(X_train, y_train)
+                y_pred_train_ols = best_ols.predict(X_train)
+                y_pred_test_ols = best_ols.predict(X_test)
+                #------------------ Ridge
+                pipe_ridge = Pipeline([
                     ("scaler", StandardScaler()),
                     ("poly", PolynomialFeatures(degree=2)),
-                    ("ridge", Ridge(alpha=grid_ridge.best_params_["alpha"])),
-                ], verbose=False)
-                pipeline_ridge.fit(X_train, y_train)
-                y_pred_train_ridge = pipeline_ridge.predict(X_train)
-                y_pred_test_ridge = pipeline_ridge.predict(X_test)
+                    ("ridge", Ridge(alpha=1.0))
+                ])
+                grid_ridge = GridSearchCV(pipe_ridge, param_grid={"ridge__alpha": np.logspace(-3, 3, 100)}, cv=5, scoring="neg_mean_squared_error")
+                grid_ridge.fit(X_train, y_train)
+                best_ridge = grid_ridge.best_estimator_
+                y_pred_train_ridge = best_ridge.predict(X_train)
+                y_pred_test_ridge = best_ridge.predict(X_test)
 
-                    # ----------------------------- PERFORMANCE METRICS -----------------------------
-                r2_train_ridge = r2_score(y_train, y_pred_train_ridge)
-                r2_test_ridge = r2_score(y_test, y_pred_test_ridge)
-                mse_train_ridge = mean_squared_error(y_train, y_pred_train_ridge)
-                mse_test_ridge = mean_squared_error(y_test, y_pred_test_ridge)
-                mae_train_ridge = mean_absolute_error(y_train, y_pred_train_ridge)
-                mae_test_ridge = mean_absolute_error(y_test, y_pred_test_ridge)
-                rmse_train_ridge = np.sqrt(mse_train_ridge)
-                rmse_test_ridge = np.sqrt(mse_test_ridge)
+                # ------------------ Lasso
+                pipe_lasso = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("poly", PolynomialFeatures(degree=2)),
+                    ("lasso", Lasso(alpha=0.1, max_iter=10000))
+                ])
+                grid_lasso = GridSearchCV(pipe_lasso, param_grid={"lasso__alpha": np.logspace(-3, 3, 100)}, cv=5, scoring="neg_mean_squared_error")
+                grid_lasso.fit(X_train, y_train)
+                best_lasso = grid_lasso.best_estimator_
+                y_pred_train_lasso = best_lasso.predict(X_train)
+                y_pred_test_lasso = best_lasso.predict(X_test)
 
-                with st.expander(" Model Metrics", expanded=True):
-                    st.subheader("📈 Train Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                    with c1:
-                        st.metric("Train R²", f"{r2_train_ridge:.3f}")
-                    with c2:
-                        st.metric("MSE", f"{mse_train_ridge:.3f}")
-                    with c3:
-                        st.metric("MAE", f"{mae_train_ridge:.3f}")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_train_ridge:.3f}")
-                    with c5:
-                        st.metric("Samples", f"{train_df.shape[0]}")
-                    with c6:
-                        st.metric("Training Start Date", f"{train_df.Date.min().date()}")
+                # ------------------ ElasticNet
+                pipe_enet = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("poly", PolynomialFeatures(degree=2)),
+                    ("enet", ElasticNet(max_iter=10000))
+                ])
+                grid_enet = GridSearchCV(pipe_enet, param_grid={"enet__alpha": np.logspace(-3, 3, 100), "enet__l1_ratio": np.linspace(0.1, 1, 50)}, cv=5, scoring="neg_mean_squared_error")
+                grid_enet.fit(X_train, y_train)
+                best_enet = grid_enet.best_estimator_
+                y_pred_train_enet = best_enet.predict(X_train)
+                y_pred_test_enet = best_enet.predict(X_test)
 
-                    st.subheader("📉 Test Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                        
-                    with c1:
-                        st.metric("Test R²", f"{r2_test_ridge:.3f}", delta=f"{r2_test_ridge - r2_train_ridge:.3f}", 
-                                delta_color="green" if r2_test_ridge > r2_train_ridge else "red")
-                    with c2:
-                        st.metric("MSE", f"{mse_test_ridge:.3f}", delta=f"{mse_test_ridge - mse_train_ridge:.3f}", 
-                                delta_color="red" if mse_test_ridge > mse_train_ridge else "green",
+                # ------------------- Compile results
+
+                results.append({
+                    "Model": "OLS with Polynomial Features",
+                    "Train R²": r2_score(y_train, y_pred_train_ols),
+                    "Test R²": r2_score(y_test, y_pred_test_ols),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_ols),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_ols),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_ols)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_ols)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_ols),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_ols)
+                })
+                results.append({
+                    "Model": f"Ridge (alpha={grid_ridge.best_params_['ridge__alpha']:.4f})",
+                    "Train R²": r2_score(y_train, y_pred_train_ridge),
+                    "Test R²": r2_score(y_test, y_pred_test_ridge),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_ridge),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_ridge),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_ridge)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_ridge)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_ridge),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_ridge)
+                })
+                results.append({
+                    "Model": f"Lasso (alpha={grid_lasso.best_params_['lasso__alpha']:.4f})",
+                    "Train R²": r2_score(y_train, y_pred_train_lasso),
+                    "Test R²": r2_score(y_test, y_pred_test_lasso),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_lasso),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_lasso),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_lasso)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_lasso)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_lasso),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_lasso)
+                })
+                results.append({
+                    "Model": f"ElasticNet (alpha={grid_enet.best_params_['enet__alpha']:.4f}, l1_ratio={grid_enet.best_params_['enet__l1_ratio']:.2f})",
+                    "Train R²": r2_score(y_train, y_pred_train_enet),
+                    "Test R²": r2_score(y_test, y_pred_test_enet),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_enet),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_enet),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_enet)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_enet)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_enet),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_enet)
+                })
+
+                model_objects = [best_ols, best_ridge, best_lasso, best_enet]
+                results_df = pd.DataFrame(results).sort_values(by="Test RMSE", ascending=True)
+                best_model_obj = model_objects[results_df.index[0]]
+
+                return best_ols, best_ridge, best_lasso, best_enet, results_df, best_model_obj
+            
+            H= 40    #Test size of 40 samples
+            train_lin = df_model.iloc[:-H].copy()
+            test_lin  = df_model.iloc[-H:].copy()
+            #train_lin, test_lin = train_test_split(df_model, test_size=0.2, shuffle=False, stratify=None)
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+
+            ols,ridge, lasso, enet, results, best_linear = fit_reg_linear_models(df_model, train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
+            st.header(f"📊 Results Dataframe")
+            st.dataframe(results)
+            st.badge(f"Best model: {results.iloc[0]['Model']}", color="green", icon="✅")
+
+            # ----------------------------- BEST MODEL PERFORMANCE -----------------------------
+            st.header(f"📊 Performance of Linear Models")
+            y_pred_train_best = best_linear.predict(train_lin[predictors])
+            y_pred_test_best = best_linear.predict(test_lin[predictors])
+            r2_train_linear_pol = r2_score(train_lin["Score"], y_pred_train_best)
+            r2_test_linear_pol = r2_score(test_lin["Score"], y_pred_test_best)
+            rmse_train_linear_pol = np.sqrt(mean_squared_error(train_lin["Score"], y_pred_train_best))
+            rmse_test_linear_pol = np.sqrt(mean_squared_error(test_lin["Score"], y_pred_test_best))
+            mae_train_linear_pol = mean_absolute_error(train_lin["Score"], y_pred_train_best)
+            mae_test_linear_pol = mean_absolute_error(test_lin["Score"], y_pred_test_best)
+            mse_train_linear_pol = rmse_train_linear_pol ** 2
+            mse_test_linear_pol = rmse_test_linear_pol ** 2
+
+            #----------------------------- PERFORMANCE METRICS -----------------------------
+            with st.expander("📈 Performance Metrics: Train vs Test", expanded=True):
+                st.subheader("📈 Train Set Performance")
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                with c1:
+                    st.metric("Train R²", f"{r2_train_linear_pol:.3f}")
+                with c2:
+                    st.metric("Train MSE", f"{mse_train_linear_pol:.3f}")
+                with c3:
+                    st.metric("Train MAE", f"{mae_train_linear_pol:.3f}")
+                with c4:
+                    st.metric("Train RMSE", f"{rmse_train_linear_pol:.3f}")
+                with c5:
+                    st.metric("Train Samples", f"{train_lin.shape[0]}")
+                with c6:
+                    st.metric("Training Start Date", f"{train_lin.Date.min().date()}")
+
+                st.subheader("📉 Test Set Performance")
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                with c1:
+                    st.metric("Test R²", f"{r2_test_linear_pol:.3f}", delta=f"{r2_test_linear_pol - r2_train_linear_pol:.3f}", 
+                            delta_color="green" if r2_test_linear_pol > r2_train_linear_pol else "red")
+                with c2:
+                    st.metric("Test MSE", f"{mse_test_linear_pol:.3f}", delta=f"{mse_test_linear_pol - mse_train_linear_pol:.3f}", 
+                                    delta_color="red" if mse_test_linear_pol > mse_train_linear_pol else "green",
                                     help="Mean Squared Error (MSE): lower values indicate better fit.\
                                         Penalizes larger errors more heavily.")
-                    with c3:
-                        st.metric("MAE", f"{mae_test_ridge:.3f}", delta=f"{mae_test_ridge - mae_train_ridge:.3f}", 
-                                    delta_color="red" if mae_test_ridge > mae_train_ridge else "green",
+                with c3:
+                    st.metric("Test MAE", f"{mae_test_linear_pol:.3f}", delta=f"{mae_test_linear_pol - mae_train_linear_pol:.3f}", 
+                                    delta_color="red" if mae_test_linear_pol > mae_train_linear_pol else "green",
                                     help="Mean Absolute Error (MAE): lower values indicate better fit.")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_test_ridge:.3f}", delta=f"{rmse_test_ridge - rmse_train_ridge:.3f}", 
-                                    delta_color="red" if rmse_test_ridge > rmse_train_ridge else "green", 
+                with c4:
+                    st.metric("Test RMSE", f"{rmse_test_linear_pol:.3f}", delta=f"{rmse_test_linear_pol - rmse_train_linear_pol:.3f}", 
+                                    delta_color="red" if rmse_test_linear_pol > rmse_train_linear_pol else "green", 
                                     help="Root Mean Squared Error (RMSE): lower values indicate better fit, in original units.")
-                    with c5:
-                        st.metric("Samples", f"{test_df.shape[0]}", help="The last 40 samples used for testing.")
-                    with c6:
-                        st.metric("Test Start Date", f"{test_df.Date.min().date()}")
-                with st.expander("📊 Model Insights", expanded=True):
-                    st.write("Best alpha:", round(grid_ridge.best_params_["alpha"], 4))
-                    st.caption("Note: Ridge Regression does not perform feature selection by shrinking coefficients to zero. The features listed above are those that were retained in the final model after regularization.")
-            elif (st.session_state.model_frozen is None) and (n >= 200):
-                st.success("MODEL READY FOR DEPLOYMENT (FREEZING NOW)", icon="✅")
-                freeze_date = df_model.iloc[199]["Date"]  # Freeze after first 200 samples (0-199)
-                frozen_df = df_model[df_model["Date"] <= freeze_date].copy()
+                with c5:
+                    st.metric("Test Samples", f"{test_lin.shape[0]}", help="The last 40 samples used for testing.")
+                with c6:
+                    st.metric("Test Start Date", f"{test_lin.Date.min().date()}")
+            # ----------------------------- LEARNING CURVE -----------------------------
+            with st.expander("📈 Learning Curve Analysis for Best Linear Model", expanded=True):
+                st.header("📈 Learning Curve for Best Linear Model")
 
-                X_frozen = sm.add_constant(frozen_df[predictors])
-                y_frozen = frozen_df["Score"]
+                def metrics_lcv(df, x_train, x_test, y_train, y_test, model=best_linear):
+                    """ 
+                    Learning Curve for winner model
+                    ------------
+                    Parameters:
+                    df: pd.DataFrame - Full dataframe
+                    x_train: pd.DataFrame - Training features
+                    x_test: pd.DataFrame - Testing features
+                    y_train: pd.Series - Training target
+                    y_test: pd.Series - Testing target
+                    models: sklearn estimator - Fitted model to evaluate learning curve
+                    ------------
+                    Returns:
+                    None - Displays learning curve plot
+                    """
+                    from sklearn.model_selection import learning_curve
 
-                model_frozen = sm.OLS(y_frozen, X_frozen).fit(cov_type='HC3')
+                    train_sizes, train_scores, test_scores = learning_curve(
+                        model,
+                        x_train,
+                        y_train,
+                        cv=5,
+                        scoring="neg_root_mean_squared_error",
+                        train_sizes=np.linspace(0.1, 1.0, 10),
+                        n_jobs=-1
+                    )
+                    train_mse_mean = -train_scores.mean(axis=1)
+                    test_mse_mean  = -test_scores.mean(axis=1)
+                    train_mse_std  = train_scores.std(axis=1)
+                    test_mse_std   = test_scores.std(axis=1)
+                    lc_df = pd.DataFrame({
+                        "Train Size": train_sizes,
+                        "Train Score": train_scores.mean(axis=1),
+                        "Test Score": test_scores.mean(axis=1)
+                    })
+                    lc_df["Gap"] = lc_df["Train Score"] - lc_df["Test Score"]
 
-                st.session_state.model_frozen = model_frozen
-                st.session_state.freeze_date = freeze_date
-                st.session_state.freeze_predictors = predictors.copy()
+                    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+                    last_step = list(model.named_steps.values())[-1]
+                    ax[0].plot(train_sizes, train_mse_mean, label="Train RMSE", color="steelblue")
+                    ax[0].plot(train_sizes, test_mse_mean, label="CV RMSE", color="orange")
+                    ax[0].fill_between(train_sizes, train_mse_mean - train_mse_std, train_mse_mean + train_mse_std, alpha=0.15, color="steelblue")
+                    ax[0].fill_between(train_sizes, test_mse_mean - test_mse_std, test_mse_mean + test_mse_std, alpha=0.15, color="orange")
+                    ax[0].set_title(f"Learning Curve — {last_step.__class__.__name__}", fontweight="bold", fontsize=8, pad=15)
+                    ax[0].set_xlabel("Training Set Size")
+                    ax[0].set_ylabel("RMSE")
+                    sns.despine(ax=ax[0])
+                    ax[0].legend()
+                    ax[0].grid()
 
-                st.info(f"Frozen on {freeze_date.date()} New data after this will be monitored, not used for training.", icon="ℹ️")
-            #------------------------------ DEPLOYMENT & MONITORING -----------------------------
-            else:
-                if st.session_state.model_frozen is not None:
-                    st.success("MODEL DEPLOYED (SESSION-FROZEN)", icon="✅")
-                # Safety: predictors must match
-                if st.session_state.freeze_predictors != predictors:
-                    st.error("Predictors changed after model freeze. Please refresh/reset the model.")
-                    st.stop()
+                    sns.barplot(x=["Train", "Test"], y=[train_mse_mean.mean(), test_mse_mean.mean()], ax=ax[1], palette=["lightblue", "orange"])
+                    ax[1].set_title(f"Average RMSE at Different Training Sizes", fontweight="bold", fontsize=8, pad=15)
+                    ax[1].set_ylabel("RMSE")
+                    sns.despine(ax=ax[1])
+                    ax[1].grid(axis="y")
 
-                model_frozen = st.session_state.model_frozen
-                freeze_date = st.session_state.freeze_date
+                    sns.lineplot(x=lc_df["Train Size"], y=lc_df["Gap"], marker="o", color="coral", label="RMSE gap Train - Test", ax=ax[2])
+                    ax[2].set_title(f"Gap Between Train and Test RMSE ", fontweight="bold", fontsize=8, pad=15)
+                    ax[2].set_xlabel("Training Set Size")
+                    ax[2].set_ylabel(f"RMSE Score Gap (Train - Test)")
+                    ax[2].annotate(
+                        text=f"Min Gap =\n{lc_df['Gap'].min():.4f}",
+                        xy=(lc_df["Train Size"].iloc[lc_df["Gap"].idxmin()], lc_df["Gap"].min()),
+                        xytext=(lc_df["Train Size"].iloc[lc_df["Gap"].idxmin()] + 10, lc_df["Gap"].min() + 0.05),
+                        textcoords="data",
+                        arrowprops= dict(arrowstyle="->", color="black"),
+                        fontsize=6, fontweight="bold"
+                    )
+                    ax[2].set_ylim(lc_df["Gap"].min() - 0.02, lc_df["Gap"].max() + 0.05)
+                    sns.despine(ax=ax[2])
+                    ax[2].legend(loc="upper right")
 
-                # Predict for all rows with the frozen model
-                X_all = sm.add_constant(df_model[predictors], has_constant="add")
-                df_model["yhat_frozen"] = model_frozen.predict(X_all)
-                df_model["resid_frozen"] = df_model["Score"] - df_model["yhat_frozen"]
+                    st.pyplot(fig)
 
-                # Split into in-sample (<= freeze) and live (> freeze)
-                live_df = df_model[df_model["Date"] > freeze_date].copy()
+                metrics_lcv(df_model, train_lin[predictors], test_lin[predictors], train_lin["Score"], test_lin["Score"], model=best_linear)
 
-                st.caption(f"Frozen on {freeze_date.date()} | Live samples: {len(live_df)}")
+            # --------------------------- EXPLANATORY POWER -----------------------------
+            with st.expander("📊 Explanatory Power of Predictors", expanded=False):
+                st.subheader("📊 Explanatory Power of Predictors")
+                 # Background dataset — small sample is enough for speed
+                X_background = shap.sample(train_lin[predictors], 50)
 
-                # Show latest prediction
-                last = df_model.sort_values("Date").iloc[-1]
-                st.metric("Latest predicted score", f"{last['yhat_frozen']:.2f}")
+                explainer   = shap.Explainer(best_linear.predict, X_background)
+                shap_values = explainer(test_lin[predictors])
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Beeswarm
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    shap.plots.beeswarm(shap_values, show=False)
+                    st.pyplot(fig)
+                with col2:
+                    # Waterfall
+                    sample_ind = 0
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    shap.plots.waterfall(shap_values[sample_ind], max_display=14, show=False)
+                    st.pyplot(fig)
 
-                # Monitoring metrics on LIVE (post-freeze)
-                if len(live_df) >= 5:
-                    mae_live = mean_absolute_error(live_df["Score"], live_df["yhat_frozen"])
-                    rmse_live = np.sqrt(mean_squared_error(live_df["Score"], live_df["yhat_frozen"]))
-                    bias_live = live_df["resid_frozen"].mean()
 
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Live MAE", f"{mae_live:.2f}")
-                    c2.metric("Live RMSE", f"{rmse_live:.2f}")
-                    c3.metric("Live Bias", f"{bias_live:.2f}")
-                else:
-                    st.info("Not enough post-freeze samples yet for stable monitoring.")
 
-                # Plot live residual drift
-                with st.expander("📊 Monitoring: Live residuals", expanded=False):
-                    if len(live_df) > 0:
-                        fig, ax = plt.subplots(figsize=(10,4))
-                        sns.lineplot(data=live_df, x="Date", y="resid_frozen", ax=ax)
-                        ax.axhline(0, color="red", linestyle="--")
-                        ax.set_title("Post-freeze residuals over time")
-                        ax.tick_params(axis='x', rotation=45)
-                        st.pyplot(fig)
 
-            #------------------------------DT REGRESSOR TRAINING PHASE-----------------------------
-        elif models == "Decision Tree Regressor":   #Toggle DT REGRESSOR Selected
-            if models == "Decision Tree Regressor":  
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
 
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
 
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
 
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
-                    #------------------------------FROZEN MODEL CONDITIONALS-----------------------------
-                if "model_frozen" not in st.session_state:
-                    st.session_state.model_frozen = None
-                if "freeze_date" not in st.session_state:
-                    st.session_state.freeze_date = None
-                if "freeze_predictors" not in st.session_state:
-                    st.session_state.freeze_predictors = None
-                n = df_model.shape[0]
-                if st.session_state.model_frozen is not None:
-                    if st.button("Reset frozen model (session)"):
-                        st.session_state.model_frozen = None
-                        st.session_state.freeze_date = None
-                        st.session_state.freeze_predictors = None
-                        st.rerun()
-            #------------------------------DT REGRESSOR TRAINING PHASE-----------------------------
-            if (st.session_state.model_frozen is None) and (n < 200):
- 
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
 
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
+    elif types == "Unsupervised":
+        from sklearn.decomposition import PCA
+        unsupervised_options = ["PCA", "T-SNE", "K-Means", "DBSCAN"]
+        unsupervised_choice = st.selectbox("Select unsupervised technique:", options=unsupervised_options, key="unsupervised_choice")
+        if unsupervised_choice == "PCA":
+            st.header("📊 Principal Component Analysis (PCA)")
+            df_model["Bad_Sleep"] = (df_model["Score"] < 80).astype(int)
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+            X_scaled = StandardScaler().fit_transform(df_model[predictors])
+            best_pca = PCA(n_components=0.85)
+            X_pca = best_pca.fit_transform(X_scaled)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], ax=ax, hue=df_model["Bad_Sleep"], palette=["green", "red"], alpha=0.7)
+            ax.set_title("PCA: First Two Principal Components")
+            sns.despine(ax=ax)
+            st.pyplot(fig)
 
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
+            num_components =  [1, 2, 3, 4, 5, 6, 7]
+            results = []
+            for i in num_components:
+                pca = PCA(n_components=i, random_state=42)
+                pca_results = pca.fit_transform(X_scaled)
+                explained_variance = pca.explained_variance_ratio_.sum() * 100
+                explained_var_ = pca.explained_variance_ratio_
+                results.append({
+                    "Components": i,
+                    "Explained Variance (%)": explained_variance,
+                    "Explained Variance": explained_var_
+                })
 
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
+            results_df = pd.DataFrame(results)
+            st.dataframe(results_df)
+            # PVE Proportion of Variance Explained
 
-                full_tree = DecisionTreeRegressor().fit(X_train, y_train)
-                path = full_tree.cost_complexity_pruning_path(X_train, y_train)
-                ccp_alphas = path.ccp_alphas # All candidate alphas
+            fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+            results_df.plot(kind="bar", x="Components", y="Explained Variance (%)", color=sns.color_palette("icefire", n_colors=len(results_df)), legend=False, ax=ax[1])
+            bars = plt.gca().patches
+            values = results_df["Explained Variance (%)"].values
+            for bar, value in zip(bars, values):
+                ax[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height(), 
+                        f"{value:.2f}%", ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax[1].set_title("Explained Variance by Number of PCA Components", fontsize=10, fontweight="bold", pad=15)
+            ax[1].set_xlabel("Number of Components")
+            ax[1].set_ylabel("Explained Variance (%)")
+            ax[1].set_ylim(0, 100)
+            sns.despine(ax=ax[1])
+            plt.tight_layout()
 
-                tscv = TimeSeriesSplit(n_splits=5, gap=2)
-                grid_tree = GridSearchCV(
-                    estimator=full_tree,
-                    param_grid={"ccp_alpha": ccp_alphas, 
-                                            "max_depth": [3, 5, 7, 10], 
-                                            "min_samples_leaf": [2, 5, 10]},
-                    cv=tscv,
-                    scoring="neg_mean_squared_error"
-                )
-                grid_tree.fit(X_train, y_train)
+            pca_df = pd.DataFrame(best_pca.components_, columns=predictors, index=[f"PC{i+1}" for i in range(best_pca.n_components_)])
+            sns.heatmap(pca_df, annot=True, fmt=".3f", cmap="RdBu_r", center=0,
+                        cbar_kws={"label": "Loading"}, vmin=-1, vmax=1, ax=ax[0])
+            ax[0].set_title("PCA Loadings — each cell shows feature contribution to each PC",
+                    fontweight="bold", fontsize=10, pad=15)
+            plt.tight_layout()
+            st.pyplot(fig) 
+        elif unsupervised_choice == "T-SNE":
+            st.header("📊 T-Distributed Stochastic Neighbor Embedding (T-SNE)")
+            from sklearn.manifold import TSNE
+            df_model["Bad_Sleep"] = (df_model["Score"] < 80).astype(int)
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+            X_scaled = StandardScaler().fit_transform(df_model[predictors])
+            tsne = TSNE(n_components=2, perplexity=10)
+            X_tsne = tsne.fit_transform(X_scaled)
+            df_tsne = pd.DataFrame(X_tsne, columns=["TSNE1", "TSNE2"])
 
-                best_tree = grid_tree.best_estimator_
-                y_pred_train_tree = best_tree.predict(X_train)
-                y_pred_test_tree = best_tree.predict(X_test)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.scatterplot(x=X_tsne[:,0], y=X_tsne[:,1], ax=ax, hue=df_model["Bad_Sleep"].map({0:"Good Sleep", 1:"Bad Sleep"}), palette=["green", "red"], alpha=0.7)
+            ax.set_title("T-SNE: 2D Visualization of Sleep Data")
+            sns.despine(ax=ax)
+            st.pyplot(fig)
 
-                    # ----------------------------- PERFORMANCE METRICS -----------------------------
-                r2_train_tree = r2_score(y_train, y_pred_train_tree)
-                r2_test_tree = r2_score(y_test, y_pred_test_tree)
-                mse_train_tree = mean_squared_error(y_train, y_pred_train_tree)
-                mse_test_tree = mean_squared_error(y_test, y_pred_test_tree)
-                mae_train_tree = mean_absolute_error(y_train, y_pred_train_tree)
-                mae_test_tree = mean_absolute_error(y_test, y_pred_test_tree)
-                rmse_train_tree = np.sqrt(mse_train_tree)
-                rmse_test_tree = np.sqrt(mse_test_tree)
+        elif unsupervised_choice == "K-Means":
+            st.header("📊 K-Means")
+            from sklearn.cluster import KMeans
+            from sklearn.metrics import silhouette_score, davies_bouldin_score
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+            df_model["Bad_Sleep"] = (df_model["Score"] < 80).astype(int)
+            X_scaled = StandardScaler().fit_transform(df_model[predictors])
 
-                with st.expander(" Model Metrics", expanded=True):
-                    st.subheader("📈 Train Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                    with c1:
-                        st.metric("Train R²", f"{r2_train_tree:.3f}")
-                    with c2:
-                        st.metric("MSE", f"{mse_train_tree:.3f}")
-                    with c3:
-                        st.metric("MAE", f"{mae_train_tree:.3f}")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_train_tree:.3f}")
-                    with c5:
-                        st.metric("Samples", f"{train_df.shape[0]}")
-                    with c6:
-                        st.metric("Training Start Date", f"{train_df.Date.min().date()}")
 
-                    st.subheader("📉 Test Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                        
-                    with c1:
-                        st.metric("Test R²", f"{r2_test_tree:.3f}", delta=f"{r2_test_tree - r2_train_tree:.3f}", 
-                                delta_color="green" if r2_test_tree > r2_train_tree else "red")
-                    with c2:
-                        st.metric("MSE", f"{mse_test_tree:.3f}", delta=f"{mse_test_tree - mse_train_tree:.3f}", 
-                                delta_color="red" if mse_test_tree > mse_train_tree else "green",
-                                    help="Mean Squared Error (MSE): lower values indicate better fit.\
-                                        Penalizes larger errors more heavily.")
-                    with c3:
-                        st.metric("MAE", f"{mae_test_tree:.3f}", delta=f"{mae_test_tree - mae_train_tree:.3f}", 
-                                    delta_color="red" if mae_test_tree > mae_train_tree else "green",
-                                    help="Mean Absolute Error (MAE): lower values indicate better fit.")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_test_tree:.3f}", delta=f"{rmse_test_tree - rmse_train_tree:.3f}", 
-                                    delta_color="red" if rmse_test_tree > rmse_train_tree else "green", 
-                                    help="Root Mean Squared Error (RMSE): lower values indicate better fit, in original units.")
-                    with c5:
-                        st.metric("Samples", f"{test_df.shape[0]}", help="The last 40 samples used for testing.")
-                    with c6:
-                        st.metric("Test Start Date", f"{test_df.Date.min().date()}")
-                with st.expander("📊 Model Insights", expanded=True):
-                    st.info(body=f"Best parameter ccp_alpha: {grid_tree.best_params_['ccp_alpha']}")
-                    st.info(body=f"Best parameter max_depth: {grid_tree.best_params_['max_depth']}")
-                    st.info(body=f"Best parameter min_samples_leaf: {grid_tree.best_params_['min_samples_leaf']}")
-                    st.info(body=f"Best Score (MSE): {-round(grid_tree.best_score_, 4)}")
-                    st.caption("Note: Decision Tree Regressor does not perform feature selection by shrinking coefficients to zero. The features listed above are those that were retained in the final model after regularization.")
+            # Train K-Means for K=2 to 10 and evaluate with Inertia, Silhouette Score, and Davies-Bouldin Score
+            results_cluster = []
+            for k in range(2, 11): # K from 2 to 10
+                kmeans = KMeans(n_clusters=k, random_state=42, algorithm="elkan")
+                kmeans.fit(X_scaled)
+                results_cluster.append({
+                    "K": k,
+                    "Inertia": kmeans.inertia_,
+                    "Silhouette Score": silhouette_score(X_scaled, kmeans.labels_),
+                    "Davies-Bouldin Score": davies_bouldin_score(X_scaled, kmeans.labels_)
+                })
+            results_cluster_df = pd.DataFrame(results_cluster).sort_values(by="Silhouette Score", ascending=False)
+            st.dataframe(results_cluster_df)
 
-                importance = pd.DataFrame({
-                    "Feature": predictors,
-                    "Importance": best_tree.feature_importances_
-                    }).sort_values("Importance", ascending=False)
-                st.dataframe(importance.style.bar(subset=["Importance"], color="#FFA07A"), height=300)
 
-                plt.figure(figsize=(20, 10))
-                plot_tree(best_tree, feature_names=predictors, filled=False, node_ids=True, rounded=True, fontsize=8)
-                plt.title("Pruned Decision Tree", fontsize=16, fontweight="bold", pad=20)
-                plt.tight_layout()
-                st.pyplot(plt)
+            fig, axes = plt.subplots(1, 3, figsize=(10, 4))
+            plt.suptitle("K-Means Clustering Evaluation Metrics vs K", fontsize=16, fontweight="bold")
+            sns.lineplot(x="K", y="Inertia", data=results_cluster_df, marker="o", color="blue", ax=axes[0])
+            axes[0].set_title("K-Means Inertia vs K", fontsize=8, fontweight="bold")
+            axes[0].set_xlabel("Number of Clusters (K)")
+            axes[0].set_ylabel("Inertia")
+            axes[0].set_xticks(results_cluster_df["K"])
+            axes[0].grid()
+            sns.despine(ax=axes[0])
 
-            elif (st.session_state.model_frozen is None) and (n >= 200):
-                st.success("MODEL READY FOR DEPLOYMENT (FREEZING NOW)", icon="✅")
-                freeze_date = df_model.iloc[199]["Date"]  # Freeze after first 200 samples (0-199)
-                frozen_df = df_model[df_model["Date"] <= freeze_date].copy()
+            sns.lineplot(x="K", y="Silhouette Score", data=results_cluster_df, marker="o", color="orange", ax=axes[1])
+            axes[1].set_title("K-Means Silhouette Score vs K", fontsize=8, fontweight="bold")
+            axes[1].set_xlabel("Number of Clusters (K)")
+            axes[1].set_ylabel("Silhouette Score")
+            axes[1].set_xticks(results_cluster_df["K"])
+            axes[1].grid()
+            sns.despine(ax=axes[1])
 
-                X_frozen = sm.add_constant(frozen_df[predictors])
-                y_frozen = frozen_df["Score"]
+            sns.lineplot(x="K", y="Davies-Bouldin Score", data=results_cluster_df, marker="o", color="green", ax=axes[2])
+            axes[2].set_title("K-Means Davies-Bouldin Score vs K", fontsize=8, fontweight="bold")
+            axes[2].set_xlabel("Number of Clusters (K)")
+            axes[2].set_ylabel("Davies-Bouldin Score")
+            axes[2].set_xticks(results_cluster_df["K"])
+            axes[2].grid()
+            sns.despine(ax=axes[2])
 
-                model_frozen = sm.OLS(y_frozen, X_frozen).fit(cov_type='HC3')
+            plt.tight_layout()
+            st.pyplot(fig)
 
-                st.session_state.model_frozen = model_frozen
-                st.session_state.freeze_date = freeze_date
-                st.session_state.freeze_predictors = predictors.copy()
+            # --------------------------------------
+            # Select best K and fit the K-Means model
+            best_k = results_cluster_df.iloc[0]["K"]
+            kmeans = KMeans(n_clusters=int(best_k), random_state=42, algorithm="elkan")
+            kmeans.fit(X_scaled)
+            df_model["KMeans_Cluster"] = kmeans.labels_
 
-                st.info(f"Frozen on {freeze_date.date()} New data after this will be monitored, not used for training.", icon="ℹ️")
-            #------------------------------ DEPLOYMENT & MONITORING -----------------------------
-            else:
-                if st.session_state.model_frozen is not None:
-                    st.success("MODEL DEPLOYED (SESSION-FROZEN)", icon="✅")
-                # Safety: predictors must match
-                if st.session_state.freeze_predictors != predictors:
-                    st.error("Predictors changed after model freeze. Please refresh/reset the model.")
-                    st.stop()
+            st.subheader(f"📊 Cluster Analysis for K={int(best_k)}")
+            cluster_analysis = df_model.groupby("KMeans_Cluster").agg({
+                "Score": "mean",
+                "REM hrs": "mean",
+                "Stress_prev_day": "mean",
+                "Deep hrs": "mean",
+                "Wake Count": "mean",
+                "Sleep_hr_surplus": "mean",
+                "Respiration": "mean",
+                "Stress_sleep": "mean"
+            }).round(2)
 
-                model_frozen = st.session_state.model_frozen
-                freeze_date = st.session_state.freeze_date
+            st.dataframe(cluster_analysis)
 
-                # Predict for all rows with the frozen model
-                X_all = sm.add_constant(df_model[predictors], has_constant="add")
-                df_model["yhat_frozen"] = model_frozen.predict(X_all)
-                df_model["resid_frozen"] = df_model["Score"] - df_model["yhat_frozen"]
+            st.subheader("📊 T-Distributed Stochastic Neighbor Embedding (T-SNE)")
+            from sklearn.manifold import TSNE
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+            X_scaled = StandardScaler().fit_transform(df_model[predictors])
+            tsne = TSNE(n_components=2, perplexity=10)
+            X_tsne = tsne.fit_transform(X_scaled)
+            df_tsne = pd.DataFrame(X_tsne, columns=["TSNE1", "TSNE2"])
 
-                # Split into in-sample (<= freeze) and live (> freeze)
-                live_df = df_model[df_model["Date"] > freeze_date].copy()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.scatterplot(x=X_tsne[:,0], y=X_tsne[:,1], ax=ax, hue=df_model["KMeans_Cluster"], palette="viridis", alpha=0.7)
+            ax.set_title("T-SNE: 2D Visualization of Sleep Data")
+            sns.despine(ax=ax)
+            st.pyplot(fig)
+            
 
-                st.caption(f"Frozen on {freeze_date.date()} | Live samples: {len(live_df)}")
 
-                # Show latest prediction
-                last = df_model.sort_values("Date").iloc[-1]
-                st.metric("Latest predicted score", f"{last['yhat_frozen']:.2f}")
 
-                # Monitoring metrics on LIVE (post-freeze)
-                if len(live_df) >= 5:
-                    mae_live = mean_absolute_error(live_df["Score"], live_df["yhat_frozen"])
-                    rmse_live = np.sqrt(mean_squared_error(live_df["Score"], live_df["yhat_frozen"]))
-                    bias_live = live_df["resid_frozen"].mean()
 
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Live MAE", f"{mae_live:.2f}")
-                    c2.metric("Live RMSE", f"{rmse_live:.2f}")
-                    c3.metric("Live Bias", f"{bias_live:.2f}")
-                else:
-                    st.info("Not enough post-freeze samples yet for stable monitoring.")
 
-                # Plot live residual drift
-                with st.expander("📊 Monitoring: Live residuals", expanded=False):
-                    if len(live_df) > 0:
-                        fig, ax = plt.subplots(figsize=(10,4))
-                        sns.lineplot(data=live_df, x="Date", y="resid_frozen", ax=ax)
-                        ax.axhline(0, color="red", linestyle="--")
-                        ax.set_title("Post-freeze residuals over time")
-                        ax.tick_params(axis='x', rotation=45)
-                        st.pyplot(fig)
-            #------------------------------RANDOM FOREST REGRESSOR TRAINING PHASE-----------------------------
-        elif models == "Random Forest Regressor":   #Toggle RF REGRESSOR Selected
-            if models == "Random Forest Regressor":  
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
 
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
 
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
-
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
-                    #------------------------------FROZEN MODEL CONDITIONALS-----------------------------
-                if "model_frozen" not in st.session_state:
-                    st.session_state.model_frozen = None
-                if "freeze_date" not in st.session_state:
-                    st.session_state.freeze_date = None
-                if "freeze_predictors" not in st.session_state:
-                    st.session_state.freeze_predictors = None
-                n = df_model.shape[0]
-                if st.session_state.model_frozen is not None:
-                    if st.button("Reset frozen model (session)"):
-                        st.session_state.model_frozen = None
-                        st.session_state.freeze_date = None
-                        st.session_state.freeze_predictors = None
-                        st.rerun()
-            #------------------------------RANDOM FOREST REGRESSOR TRAINING PHASE-----------------------------
-            if (st.session_state.model_frozen is None) and (n < 200):
- 
-                H = 40
-                predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
-
-                df_model = recovery[["Date"] + predictors + ["Score"]].dropna().copy()
-                df_model = df_model.sort_values("Date").reset_index(drop=True)
-
-                train_df = df_model.iloc[:-H].copy()
-                test_df  = df_model.iloc[-H:].copy()
-
-                X_train = train_df[predictors]
-                y_train = train_df["Score"]
-                X_test = test_df[predictors]
-                y_test = test_df["Score"]
-
-                tscv = TimeSeriesSplit(n_splits=5, gap=2)
-                grid_rf = GridSearchCV(
-                    estimator=RandomForestRegressor(n_estimators=100, random_state=42, oob_score=False),
-                    param_grid={"max_depth": [3, 5, 7, 10], 
-                                "min_samples_leaf": [2, 5, 10],
-                                "max_features": ["sqrt", "log2", 0.33, 0.5, 1]},
-                    cv=tscv,
-                    scoring="neg_mean_squared_error",
-                    n_jobs=-1 #All the CPU cores available are used to run the grid search in parallel
-                )
-                grid_rf.fit(X_train, y_train)
-
-                best_rf = grid_rf.best_estimator_
-                y_pred_train_rf = best_rf.predict(X_train)
-                y_pred_test_rf = best_rf.predict(X_test)
-
-                    # ----------------------------- PERFORMANCE METRICS -----------------------------
-                r2_train_rf = r2_score(y_train, y_pred_train_rf)
-                r2_test_rf = r2_score(y_test, y_pred_test_rf)
-                mse_train_rf = mean_squared_error(y_train, y_pred_train_rf)
-                mse_test_rf = mean_squared_error(y_test, y_pred_test_rf)
-                mae_train_rf = mean_absolute_error(y_train, y_pred_train_rf)
-                mae_test_rf = mean_absolute_error(y_test, y_pred_test_rf)
-                rmse_train_rf = np.sqrt(mse_train_rf)
-                rmse_test_rf = np.sqrt(mse_test_rf)
-
-                with st.expander(" Model Metrics", expanded=True):
-                    st.subheader("📈 Train Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                    with c1:
-                        st.metric("Train R²", f"{r2_train_rf:.3f}")
-                    with c2:
-                        st.metric("MSE", f"{mse_train_rf:.3f}")
-                    with c3:
-                        st.metric("MAE", f"{mae_train_rf:.3f}")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_train_rf:.3f}")
-                    with c5:
-                        st.metric("Samples", f"{train_df.shape[0]}")
-                    with c6:
-                        st.metric("Training Start Date", f"{train_df.Date.min().date()}")
-
-                    st.subheader("📉 Test Set Performance")
-                    c1, c2, c3, c4, c5, c6 = st.columns(6)
-                        
-                    with c1:
-                        st.metric("Test R²", f"{r2_test_rf:.3f}", delta=f"{r2_test_rf - r2_train_rf:.3f}", 
-                                delta_color="green" if r2_test_rf > r2_train_rf else "red")
-                    with c2:
-                        st.metric("MSE", f"{mse_test_rf:.3f}", delta=f"{mse_test_rf - mse_train_rf:.3f}", 
-                                delta_color="red" if mse_test_rf > mse_train_rf else "green",
-                                    help="Mean Squared Error (MSE): lower values indicate better fit.\
-                                        Penalizes larger errors more heavily.")
-                    with c3:
-                        st.metric("MAE", f"{mae_test_rf:.3f}", delta=f"{mae_test_rf - mae_train_rf:.3f}", 
-                                    delta_color="red" if mae_test_rf > mae_train_rf else "green",
-                                    help="Mean Absolute Error (MAE): lower values indicate better fit.")
-                    with c4:
-                        st.metric("RMSE", f"{rmse_test_rf:.3f}", delta=f"{rmse_test_rf - rmse_train_rf:.3f}", 
-                                    delta_color="red" if rmse_test_rf > rmse_train_rf else "green", 
-                                    help="Root Mean Squared Error (RMSE): lower values indicate better fit, in original units.")
-                    with c5:
-                        st.metric("Samples", f"{test_df.shape[0]}", help="The last 40 samples used for testing.")
-                    with c6:
-                        st.metric("Test Start Date", f"{test_df.Date.min().date()}")
-                '''with st.expander("📊 Model Insights", expanded=True):
-                    st.info(body=f"Best parameter ccp_alpha: {grid_tree.best_params_['ccp_alpha']}")
-                    st.info(body=f"Best parameter max_depth: {grid_tree.best_params_['max_depth']}")
-                    st.info(body=f"Best parameter min_samples_leaf: {grid_tree.best_params_['min_samples_leaf']}")
-                    st.info(body=f"Best Score (MSE): {-round(grid_tree.best_score_, 4)}")
-                    st.caption("Note: Decision Tree Regressor does not perform feature selection by shrinking coefficients to zero. The features listed above are those that were retained in the final model after regularization.")'''
-
-                importance = pd.DataFrame({
-                    "Feature": predictors,
-                    "Importance": best_rf.feature_importances_
-                    }).sort_values("Importance", ascending=False)
-                st.dataframe(importance.style.bar(subset=["Importance"], color="#FFA07A"), height=300)
 
         
 st.caption(

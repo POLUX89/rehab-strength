@@ -1,4 +1,10 @@
 # Changelog
+## [2.3.3] -2026/04/26
+- Regression Learned models: OLS, Ridge, Lasso, Enet
+- Learning curve
+- Shap interpretation
+- Unsupervised Models: PCA, T-SNE, K-Means
+
 ## [2.3.2] -2026/03/15
 - Ramsey reset Test on OLS (Linearity)
 - Durbin Watson Test (Autocorrelation)
@@ -41,7 +47,6 @@ Models Tab
 -Recovery plot with nap on home tab
 -Home tab recovery charts with insights
 -Error handling with naps metrics
->>>>>>> main
 
 ## [2.1.0] - 2026/01/20
 -Naps added to sleep tab
