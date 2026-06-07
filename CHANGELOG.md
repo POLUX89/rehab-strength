@@ -1,8 +1,11 @@
 # Changelog
-## [2.3.4] - 
+## [2.3.4] - 2026/06/07
 - Time to compare models
 - Non linear models included fit, lc & performance metrics (DT, KNN, SVR)
 - Time series analysis tab - Stationary and Autocorrelation (ACF, PACF, ADF, KPSS)
+- Ensemble models added (Random Forest, AdaBoost and GradientBoost)
+- st.cache_data() added to minimize times of training models when data is not changed
+- Learning curve improved
 
 ## [2.3.3] -2026/04/26
 - Regression Learned models: OLS, Ridge, Lasso, Enet

@@ -2,8 +2,8 @@
 # Rehab Strength Dashboard (Workouts + Sleep + Recovery)
 # Run: streamlit run app.py
 
-from pyparsing import line
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
 from statsmodels import tsa
 import streamlit as st
 import pandas as pd
@@ -1491,7 +1491,8 @@ with tab5:
 # =========================
 with tab6:
     st.header("⚙️ Models")
-    st.write(f"Overall Time Series Analysis: **{time_series_analysis}**")
+    st.success(f"Overall Time Series Analysis: **{time_series_analysis}**")
+
     recovery = st.session_state.df_recovery.copy()
     recovery["Date"] = pd.to_datetime(recovery["Date"], errors="coerce")  # Convert to datetime
     recovery["Sleep_need_hrs"] = recovery["Sleep Need"].apply(string_to_decimal_hours)
@@ -2185,13 +2186,13 @@ with tab6:
 
 
         elif models == "Other Linear Models":
-            def fit_reg_linear_models(df, X_train, y_train, X_test, y_test):
+            @st.cache_data(show_spinner="Fitting linear models... (runs once per dataset)")
+            def fit_reg_linear_models(X_train, y_train, X_test, y_test):
 
-                """ 
+                """
                 Fit OLS, Ridge, Lasso, and ElasticNet regression models with polynomial features and scaling.
                 ------------
                 Parameters:
-                df: pd.DataFrame - Full dataframe 
                 X_train: pd.DataFrame - Training features
                 y_train: pd.Series - Training target
                 X_test: pd.DataFrame - Testing features
@@ -2306,7 +2307,7 @@ with tab6:
             predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
 
             time_start = time.time()
-            ols,ridge, lasso, enet, results, best_linear = fit_reg_linear_models(df_model, train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
+            ols,ridge, lasso, enet, results, best_linear = fit_reg_linear_models(train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
             time_end = time.time()
             st.header(f"📊 Results Dataframe")
             st.dataframe(results)
@@ -2384,34 +2385,31 @@ with tab6:
                     Returns:
                     None - Displays learning curve plot
                     """
-                    from sklearn.model_selection import learning_curve
+                    from sklearn.base import clone
 
-                    train_sizes, train_scores, test_scores = learning_curve(
-                        model,
-                        x_train,
-                        y_train,
-                        cv=5,
-                        scoring="neg_root_mean_squared_error",
-                        train_sizes=np.linspace(0.1, 1.0, 10),
-                        n_jobs=-1
-                    )
-                    train_mse_mean = -train_scores.mean(axis=1)
-                    test_mse_mean  = -test_scores.mean(axis=1)
-                    train_mse_std  = train_scores.std(axis=1)
-                    test_mse_std   = test_scores.std(axis=1)
+                    train_sizes = np.linspace(10, len(x_train), 10).astype(int)
+                    train_rmse_list = []
+                    test_rmse_list  = []
+
+                    for ts in train_sizes:
+                        m = clone(model)
+                        m.fit(x_train.iloc[:ts], y_train.iloc[:ts])
+                        train_rmse_list.append(np.sqrt(mean_squared_error(y_train.iloc[:ts], m.predict(x_train.iloc[:ts]))))
+                        test_rmse_list.append(np.sqrt(mean_squared_error(y_test, m.predict(x_test))))
+
+                    train_mse_mean = np.array(train_rmse_list)
+                    test_mse_mean  = np.array(test_rmse_list)
                     lc_df = pd.DataFrame({
                         "Train Size": train_sizes,
-                        "Train Score": train_scores.mean(axis=1),
-                        "Test Score": test_scores.mean(axis=1)
+                        "Train Score": train_mse_mean,
+                        "Test Score": test_mse_mean
                     })
-                    lc_df["Gap"] = lc_df["Train Score"] - lc_df["Test Score"]
+                    lc_df["Gap"] = lc_df["Test Score"] - lc_df["Train Score"]
 
                     fig, ax = plt.subplots(1, 3, figsize=(14, 4))
                     last_step = list(model.named_steps.values())[-1]
                     ax[0].plot(train_sizes, train_mse_mean, label="Train RMSE", color="steelblue")
-                    ax[0].plot(train_sizes, test_mse_mean, label="CV RMSE", color="orange")
-                    ax[0].fill_between(train_sizes, train_mse_mean - train_mse_std, train_mse_mean + train_mse_std, alpha=0.15, color="steelblue")
-                    ax[0].fill_between(train_sizes, test_mse_mean - test_mse_std, test_mse_mean + test_mse_std, alpha=0.15, color="orange")
+                    ax[0].plot(train_sizes, test_mse_mean, label="Test RMSE (holdout)", color="orange")
                     ax[0].set_title(f"Learning Curve — {last_step.__class__.__name__}", fontweight="bold", fontsize=8, pad=15)
                     ax[0].set_xlabel("Training Set Size")
                     ax[0].set_ylabel("RMSE")
@@ -2468,12 +2466,12 @@ with tab6:
 
         # ---------------------------------- NON LINEAR MODELS ----------------------------------
         elif models == "Non Linear Models":
-            def fit_reg_non_linear_models(df, X_train, y_train, X_test, y_test):
-                """ 
+            @st.cache_data(show_spinner="Fitting non-linear models... (runs once per dataset)")
+            def fit_reg_non_linear_models(X_train, y_train, X_test, y_test):
+                """
                 Fit DT, SVM, KNN with scaling features and select best hyperparameters using GridSearchCV.
                 ------------
                 Parameters:
-                df: pd.DataFrame - Full dataframe 
                 X_train: pd.DataFrame - Training features
                 y_train: pd.Series - Training target
                 X_test: pd.DataFrame - Testing features
@@ -2596,7 +2594,7 @@ with tab6:
             predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
 
             time_start = time.time()
-            dt, knn, svmr, results, best_model_non_linear = fit_reg_non_linear_models(df_model, train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
+            dt, knn, svmr, results, best_model_non_linear = fit_reg_non_linear_models(train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
             time_end = time.time()
             st.header(f"📊 Results Dataframe")
             st.dataframe(results)
@@ -2675,34 +2673,31 @@ with tab6:
                     Returns:
                     None - Displays learning curve plot
                     """
-                    from sklearn.model_selection import learning_curve
+                    from sklearn.base import clone
 
-                    train_sizes, train_scores, test_scores = learning_curve(
-                        model,
-                        x_train,
-                        y_train,
-                        cv=5,
-                        scoring="neg_root_mean_squared_error",
-                        train_sizes=np.linspace(0.1, 1.0, 10),
-                        n_jobs=-1
-                    )
-                    train_mse_mean = -train_scores.mean(axis=1)
-                    test_mse_mean  = -test_scores.mean(axis=1)
-                    train_mse_std  = train_scores.std(axis=1)
-                    test_mse_std   = test_scores.std(axis=1)
+                    train_sizes = np.linspace(10, len(x_train), 10).astype(int)
+                    train_rmse_list = []
+                    test_rmse_list  = []
+
+                    for ts in train_sizes:
+                        m = clone(model)
+                        m.fit(x_train.iloc[:ts], y_train.iloc[:ts])
+                        train_rmse_list.append(np.sqrt(mean_squared_error(y_train.iloc[:ts], m.predict(x_train.iloc[:ts]))))
+                        test_rmse_list.append(np.sqrt(mean_squared_error(y_test, m.predict(x_test))))
+
+                    train_mse_mean = np.array(train_rmse_list)
+                    test_mse_mean  = np.array(test_rmse_list)
                     lc_df = pd.DataFrame({
                         "Train Size": train_sizes,
-                        "Train Score": train_scores.mean(axis=1),
-                        "Test Score": test_scores.mean(axis=1)
+                        "Train Score": train_mse_mean,
+                        "Test Score": test_mse_mean
                     })
-                    lc_df["Gap"] = lc_df["Train Score"] - lc_df["Test Score"]
+                    lc_df["Gap"] = lc_df["Test Score"] - lc_df["Train Score"]
 
                     fig, ax = plt.subplots(1, 3, figsize=(14, 4))
                     last_step = list(model.named_steps.values())[-1]
                     ax[0].plot(train_sizes, train_mse_mean, label="Train RMSE", color="steelblue")
-                    ax[0].plot(train_sizes, test_mse_mean, label="CV RMSE", color="orange")
-                    ax[0].fill_between(train_sizes, train_mse_mean - train_mse_std, train_mse_mean + train_mse_std, alpha=0.15, color="steelblue")
-                    ax[0].fill_between(train_sizes, test_mse_mean - test_mse_std, test_mse_mean + test_mse_std, alpha=0.15, color="orange")
+                    ax[0].plot(train_sizes, test_mse_mean, label="Test RMSE (holdout)", color="orange")
                     ax[0].set_title(f"Learning Curve — {last_step.__class__.__name__}", fontweight="bold", fontsize=8, pad=15)
                     ax[0].set_xlabel("Training Set Size")
                     ax[0].set_ylabel("RMSE")
@@ -2755,7 +2750,307 @@ with tab6:
                     fig, ax = plt.subplots(figsize=(8, 5))
                     shap.plots.waterfall(shap_values_non_linear[sample_ind], max_display=14, show=False)
                     st.pyplot(fig)
-    
+        elif models == "Bagging & Boosting Models":
+
+            @st.cache_data(show_spinner="Training ensemble models... (runs once per dataset)")
+            def fit_ensemble_models(X_train, y_train, X_test, y_test):
+
+                """
+                Fit RF, Adaboost and Gradient Boosting with grid search hyperparameters
+                ------------
+                Parameters:
+                X_train: pd.DataFrame - Training features
+                y_train: pd.Series - Training target
+                X_test: pd.DataFrame - Testing features
+                y_test: pd.Series - Testing target
+                ------------
+                Returns:
+                dict - Dictionary of model name to fitted model and performance metrics
+                """
+                results = []
+                #------------------ RF ---------------------------
+                from sklearn.ensemble import RandomForestRegressor
+                from sklearn.ensemble import AdaBoostRegressor
+                from sklearn.ensemble import GradientBoostingRegressor
+                pipe_rf = Pipeline([
+                    ("rf", RandomForestRegressor(criterion="squared_error", n_jobs=4))
+                ])
+                grid_rf = GridSearchCV(pipe_rf, 
+                                       param_grid=
+                                       {"rf__n_estimators": [100, 200, 300], 
+                                        "rf__max_depth": [None, 10, 20, 30],
+                                        "rf__min_samples_leaf": [2, 5, 10],
+                                        "rf__max_features": ["sqrt", "log2", 0.33, 0.5]}, 
+                                        cv=5, scoring="neg_mean_squared_error")
+                grid_rf.fit(X_train, y_train)
+                best_rf = grid_rf.best_estimator_
+                y_pred_train_rf = best_rf.predict(X_train)
+                y_pred_test_rf = best_rf.predict(X_test)
+
+                # ------------------ AdaBoost ---------------------------
+                param_grid = [
+                    # DT — no scaling needed
+                    {
+                        "ada__estimator":                  [DecisionTreeRegressor()],
+                        "ada__estimator__max_depth":       [1, 2, 3], #DT hyperparameter
+                        "ada__estimator__min_samples_leaf":[1, 5, 10], #DT hyperparameter
+                        "ada__n_estimators":               [100, 200, 300],
+                        "ada__learning_rate":              [0.01, 0.1, 0.5],
+                    },
+                    # SVR — scaling required
+                    {
+                        "ada__estimator":                  [SVR()],
+                        "ada__estimator__C":               [0.1, 1.0, 10.0],#SVR Hyperparameter
+                        "ada__estimator__kernel":          ["rbf", "linear"], #SVR Hyperparameter
+                        "ada__n_estimators":               [100, 200], #Adaboost 
+                        "ada__learning_rate":              [0.01, 0.1],#Adaboost
+                    },
+                ]
+
+                pipe = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("ada", AdaBoostRegressor())
+                ])
+
+                grid_ada = GridSearchCV(
+                    estimator=pipe,
+                    param_grid=param_grid,   # note: now uses "ada__" prefix
+                    cv=5,
+                    scoring="neg_mean_squared_error",
+                    n_jobs=4
+                )
+                grid_ada.fit(X_train, y_train)
+                best_ada = grid_ada.best_estimator_
+                y_pred_train_ada = best_ada.predict(X_train)
+                y_pred_test_ada = best_ada.predict(X_test)
+
+                # ------------------ Gradient Boosting ---------------------------
+                pipe_gb = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("gb", GradientBoostingRegressor(loss="squared_error"))
+                ])
+                grid_gb = GridSearchCV(pipe_gb, 
+                                        param_grid={
+                                            "gb__learning_rate": np.logspace(-3, 0, 10),
+                                            "gb__n_estimators": [100, 200, 300],
+                                            "gb__max_depth": [3, 4, 5],
+                                            "gb__max_features": ["auto", "sqrt", "log2"],
+                                            "gb__subsample": [0.6, 0.8, 1.0]
+                                        },
+                                        cv=5,
+                                        scoring="neg_mean_squared_error",
+                                        n_jobs=4
+                )
+                grid_gb.fit(X_train, y_train)
+                best_gb = grid_gb.best_estimator_
+                y_pred_train_gb = best_gb.predict(X_train)
+                y_pred_test_gb = best_gb.predict(X_test)
+
+                # ------------------- Compile results ---------------------------
+                results.append({
+                    "Model": f"Random Forest (n_estimators={grid_rf.best_params_['rf__n_estimators']}, max_depth={grid_rf.best_params_['rf__max_depth']}, min_samples_leaf={grid_rf.best_params_['rf__min_samples_leaf']}, max_features={grid_rf.best_params_['rf__max_features']})",
+                    "Train R²": r2_score(y_train, y_pred_train_rf),
+                    "Test R²": r2_score(y_test, y_pred_test_rf),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_rf),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_rf),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_rf)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_rf)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_rf),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_rf)
+                })
+                results.append({
+                    "Model": f"AdaBoost (estimator={grid_ada.best_params_['ada__estimator'].__class__.__name__}, n_estimators={grid_ada.best_params_['ada__n_estimators']}, learning_rate={grid_ada.best_params_['ada__learning_rate']})",
+                    "Train R²": r2_score(y_train, y_pred_train_ada),
+                    "Test R²": r2_score(y_test, y_pred_test_ada),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_ada),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_ada),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_ada)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_ada)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_ada),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_ada)
+                })
+                results.append({
+                    "Model": f"Gradient Boosting (n_estimators={grid_gb.best_params_['gb__n_estimators']}, learning_rate={grid_gb.best_params_['gb__learning_rate']}, max_depth={grid_gb.best_params_['gb__max_depth']}, max_features={grid_gb.best_params_['gb__max_features']}, subsample={grid_gb.best_params_['gb__subsample']})",
+                    "Train R²": r2_score(y_train, y_pred_train_gb),
+                    "Test R²": r2_score(y_test, y_pred_test_gb),
+                    "Train MSE": mean_squared_error(y_train, y_pred_train_gb),
+                    "Test MSE": mean_squared_error(y_test, y_pred_test_gb),
+                    "Train RMSE": np.sqrt(mean_squared_error(y_train, y_pred_train_gb)),
+                    "Test RMSE": np.sqrt(mean_squared_error(y_test, y_pred_test_gb)),
+                    "Train MAE": mean_absolute_error(y_train, y_pred_train_gb),
+                    "Test MAE": mean_absolute_error(y_test, y_pred_test_gb)
+                })
+                model_objects = [best_rf, best_ada, best_gb]
+                results_df = pd.DataFrame(results).sort_values(by="Test RMSE", ascending=True)
+                best_model_obj = model_objects[results_df.index[0]]
+
+                return best_rf, best_ada, best_gb, results_df, best_model_obj
+            
+            H= 40    #Test size of 40 samples
+            train_lin = df_model.iloc[:-H].copy()
+            test_lin  = df_model.iloc[-H:].copy()
+            #train_lin, test_lin = train_test_split(df_model, test_size=0.2, shuffle=False, stratify=None)
+            predictors = ["REM hrs", "Stress_prev_day", "Deep hrs", "Wake Count", "Sleep_hr_surplus", "Respiration", "Stress_sleep"]
+
+            time_start = time.time()
+            rf, ada, gb, results, best_model_ensemble = fit_ensemble_models(train_lin[predictors], train_lin["Score"], test_lin[predictors], test_lin["Score"])
+            time_end = time.time()
+            st.header(f"📊 Results Dataframe")
+            st.dataframe(results)
+            st.badge(f"Best model: {results.iloc[0]['Model']}", color="green", icon="✅")
+            st.badge(f"Best parameters: {best_model_ensemble.get_params()}", icon="✅")
+            st.info(f"Time taken to fit models: {time_end - time_start:.2f} seconds")
+
+            # ----------------------------- BEST MODEL PERFORMANCE -----------------------------
+            st.header(f"📊 Performance of Ensemble Models")
+            y_pred_train_best_ensemble = best_model_ensemble.predict(train_lin[predictors])
+            y_pred_test_best_ensemble = best_model_ensemble.predict(test_lin[predictors])
+            r2_train_ensemble = r2_score(train_lin["Score"], y_pred_train_best_ensemble)
+            r2_test_ensemble = r2_score(test_lin["Score"], y_pred_test_best_ensemble)
+            rmse_train_ensemble = np.sqrt(mean_squared_error(train_lin["Score"], y_pred_train_best_ensemble))
+            rmse_test_ensemble = np.sqrt(mean_squared_error(test_lin["Score"], y_pred_test_best_ensemble))
+            mae_train_ensemble = mean_absolute_error(train_lin["Score"], y_pred_train_best_ensemble)
+            mae_test_ensemble = mean_absolute_error(test_lin["Score"], y_pred_test_best_ensemble)
+            mse_train_ensemble = rmse_train_ensemble ** 2
+            mse_test_ensemble = rmse_test_ensemble ** 2
+
+    #----------------------------- PERFORMANCE METRICS -----------------------------
+            with st.expander("📈 Performance Metrics: Train vs Test", expanded=True):
+                st.subheader("📈 Train Set Performance")
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                with c1:
+                    st.metric("Train R²", f"{r2_train_ensemble:.3f}")
+                with c2:
+                    st.metric("Train MSE", f"{mse_train_ensemble:.3f}")
+                with c3:
+                    st.metric("Train MAE", f"{mae_train_ensemble:.3f}")
+                with c4:
+                    st.metric("Train RMSE", f"{rmse_train_ensemble:.3f}")
+                with c5:
+                    st.metric("Train Samples", f"{train_lin.shape[0]}")
+                with c6:
+                    st.metric("Training Start Date", f"{train_lin.Date.min().date()}")
+
+                st.subheader("📉 Test Set Performance")
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                with c1:
+                    st.metric("Test R²", f"{r2_test_ensemble:.3f}", delta=f"{r2_test_ensemble - r2_train_ensemble:.3f}", 
+                            delta_color="green" if r2_test_ensemble > r2_train_ensemble else "red")
+                with c2:
+                    st.metric("Test MSE", f"{mse_test_ensemble:.3f}", delta=f"{mse_test_ensemble - mse_train_ensemble:.3f}", 
+                                    delta_color="red" if mse_test_ensemble > mse_train_ensemble else "green",
+                                    help="Mean Squared Error (MSE): lower values indicate better fit.\
+                                        Penalizes larger errors more heavily.")
+                with c3:
+                    st.metric("Test MAE", f"{mae_test_ensemble:.3f}", delta=f"{mae_test_ensemble - mae_train_ensemble:.3f}", 
+                                    delta_color="red" if mae_test_ensemble > mae_train_ensemble else "green",
+                                    help="Mean Absolute Error (MAE): lower values indicate better fit.")
+                with c4:
+                    st.metric("Test RMSE", f"{rmse_test_ensemble:.3f}", delta=f"{rmse_test_ensemble - rmse_train_ensemble:.3f}", 
+                                    delta_color="red" if rmse_test_ensemble > rmse_train_ensemble else "green", 
+                                    help="Root Mean Squared Error (RMSE): lower values indicate better fit, in original units.")
+                with c5:
+                    st.metric("Test Samples", f"{test_lin.shape[0]}", help="The last 40 samples used for testing.")
+                with c6:
+                    st.metric("Test Start Date", f"{test_lin.Date.min().date()}")
+
+            # ----------------------------- LEARNING CURVE -----------------------------
+            with st.expander("📈 Learning Curve Analysis for Best Ensemble Model", expanded=True):
+                st.header("📈 Learning Curve for Best Ensemble Model")
+
+                def metrics_lcv_ensemble(df, x_train, x_test, y_train, y_test, model=best_model_ensemble):
+                    """ 
+                    Learning Curve for winner model
+                    ------------
+                    Parameters:
+                    df: pd.DataFrame - Full dataframe
+                    x_train: pd.DataFrame - Training features
+                    x_test: pd.DataFrame - Testing features
+                    y_train: pd.Series - Training target
+                    y_test: pd.Series - Testing target
+                    model: sklearn estimator - Fitted model to evaluate learning curve
+                    ------------
+                    Returns:
+                    None - Displays learning curve plot
+                    """
+                    from sklearn.base import clone
+
+                    train_sizes = np.linspace(10, len(x_train), 10).astype(int)
+                    train_rmse_list = []
+                    test_rmse_list  = []
+
+                    for ts in train_sizes:
+                        m = clone(model)
+                        m.fit(x_train.iloc[:ts], y_train.iloc[:ts])
+                        train_rmse_list.append(np.sqrt(mean_squared_error(y_train.iloc[:ts], m.predict(x_train.iloc[:ts]))))
+                        test_rmse_list.append(np.sqrt(mean_squared_error(y_test, m.predict(x_test))))
+
+                    train_mse_mean = np.array(train_rmse_list)
+                    test_mse_mean  = np.array(test_rmse_list)
+                    lc_df = pd.DataFrame({
+                        "Train Size": train_sizes,
+                        "Train Score": train_mse_mean,
+                        "Test Score": test_mse_mean
+                    })
+                    lc_df["Gap"] = lc_df["Test Score"] - lc_df["Train Score"]
+
+                    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+                    last_step = list(model.named_steps.values())[-1]
+                    ax[0].plot(train_sizes, train_mse_mean, label="Train RMSE", color="steelblue")
+                    ax[0].plot(train_sizes, test_mse_mean, label="Test RMSE (holdout)", color="orange")
+                    ax[0].set_title(f"Learning Curve — {last_step.__class__.__name__}", fontweight="bold", fontsize=8, pad=15)
+                    ax[0].set_xlabel("Training Set Size")
+                    ax[0].set_ylabel("RMSE")
+                    sns.despine(ax=ax[0])
+                    ax[0].legend()
+                    ax[0].grid()
+
+                    sns.barplot(x=["Train", "Test"], y=[train_mse_mean.mean(), test_mse_mean.mean()], ax=ax[1], palette=["lightblue", "orange"])
+                    ax[1].set_title(f"Average RMSE at Different Training Sizes", fontweight="bold", fontsize=8, pad=15)
+                    ax[1].set_ylabel("RMSE")
+                    sns.despine(ax=ax[1])
+                    ax[1].grid(axis="y")
+
+                    sns.lineplot(x=lc_df["Train Size"], y=lc_df["Gap"], marker="o", color="coral", label="RMSE gap Train - Test", ax=ax[2])
+                    ax[2].set_title(f"Gap Between Train and Test RMSE ", fontweight="bold", fontsize=8, pad=15)
+                    ax[2].set_xlabel("Training Set Size")
+                    ax[2].set_ylabel(f"RMSE Score Gap (Train - Test)")
+                    ax[2].annotate(
+                        text=f"Min Gap =\n{lc_df['Gap'].min():.4f}",
+                        xy=(lc_df["Train Size"].iloc[lc_df["Gap"].idxmin()], lc_df["Gap"].min()),
+                        xytext=(lc_df["Train Size"].iloc[lc_df["Gap"].idxmin()] + 10, lc_df["Gap"].min() + 0.05),
+                        textcoords="data",
+                        arrowprops= dict(arrowstyle="->", color="black"),
+                        fontsize=6, fontweight="bold"
+                    )
+                    ax[2].set_ylim(lc_df["Gap"].min() - 0.02, lc_df["Gap"].max() + 0.05)
+                    sns.despine(ax=ax[2])
+                    ax[2].legend(loc="upper right")
+
+                    st.pyplot(fig)
+
+                metrics_lcv_ensemble(df_model, train_lin[predictors], test_lin[predictors], train_lin["Score"], test_lin["Score"], model=best_model_ensemble)
+            # --------------------------- EXPLANATORY POWER -----------------------------
+            with st.expander("📊 Explanatory Power of Predictors", expanded=False):
+                st.subheader("📊 Explanatory Power of Predictors")
+                 # Background dataset — small sample is enough for speed
+                X_background = shap.sample(train_lin[predictors], 100)
+
+                explainer_ensemble   = shap.Explainer(best_model_ensemble.predict, X_background)
+                shap_values_ensemble = explainer_ensemble(test_lin[predictors])
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Beeswarm
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    shap.plots.beeswarm(shap_values_ensemble, show=False)
+                    st.pyplot(fig)
+                with col2:
+                    # Waterfall
+                    sample_ind = 0
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    shap.plots.waterfall(shap_values_ensemble[sample_ind], max_display=14, show=False)
+                    st.pyplot(fig)
+
     # ---------------------------------- UNSUPERVISED LEARNING ----------------------------------
     elif types == "Unsupervised":
         from sklearn.decomposition import PCA
@@ -2915,16 +3210,7 @@ with tab6:
             ax.set_title("T-SNE: 2D Visualization of Sleep Data")
             sns.despine(ax=ax)
             st.pyplot(fig)
-            
-
-
-
-
-
-
-
-
-        
+                   
 st.caption(
     "Tip: If you only train 3–4 days/week, use weekly aggregation (Volume / mean Recovery / mean Sleep) "
     "to avoid the mismatch between daily sleep and training frequency."
