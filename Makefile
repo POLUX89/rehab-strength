@@ -38,7 +38,7 @@ format:
 	ruff check --fix .
 
 check-secrets:
-	detect-secrets scan --baseline .secrets.baseline
+	gitleaks detect --source . --redact --no-banner
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

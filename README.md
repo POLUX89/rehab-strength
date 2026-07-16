@@ -226,8 +226,8 @@ while the data never is.
   See [`.env.example`](./.env.example) and [`.streamlit/secrets.toml.example`](./.streamlit/secrets.toml.example).
 - **The deployed app holds no secrets.** It reads manually uploaded CSVs and never
   contacts Google.
-- **Defense in depth.** `pre-commit` runs `detect-secrets`, `detect-private-key` and
-  `nbstripout` on every commit; CI additionally runs `gitleaks` across the full history.
+- **Defense in depth.** `pre-commit` runs `gitleaks` and
+  `nbstripout` on every commit; CI runs `gitleaks` across the full history.
 - **Notebook outputs are stripped**, since rendered cells embed personal health data.
 
 The ingestion code is published; the data it ingests is not.

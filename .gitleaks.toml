@@ -1,0 +1,22 @@
+# Configuración de gitleaks. Misma config en pre-commit y en CI.
+# Correr:  make check-secrets
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Falsos positivos revisados uno por uno"
+regexTarget = "match"
+
+regexes = [
+  # Placeholder de la plantilla de secretos: entre las cabeceras solo hay "...".
+  # Deliberadamente literal: una private key real en ese archivo SÍ debe fallar.
+  '''-----BEGIN PRIVATE KEY-----\\n\.\.\.\\n-----END PRIVATE KEY-----\\n''',
+]
+
+paths = [
+  # Baseline de detect-secrets, ya eliminado pero presente en el historial (3c2a301).
+  # Solo contenía digests SHA1 irreversibles de dos falsos positivos, nunca
+  # material criptográfico. gitleaks los lee como API keys por su forma (40 hex).
+  '''^\.secrets\.baseline$''',
+]

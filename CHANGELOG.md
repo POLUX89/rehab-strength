@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.4.1] - 2026/07/16
+
+### Fixed
+- CI en rojo por el escaneo de secretos. `detect-secrets` y `gitleaks` se pisaban:
+  el primero escribía digests SHA1 en `.secrets.baseline` y el segundo los leía
+  como API keys por su forma. Ninguno era un secreto real; los dos hallazgos del
+  baseline eran un placeholder y la palabra "secrets" en el Makefile.
+
+### Changed
+- Un solo escáner de secretos: `gitleaks`, con la misma config (`.gitleaks.toml`)
+  en pre-commit y en CI, para que nada pase en local y falle en CI.
+- Eliminados `detect-secrets`, `.secrets.baseline` y el hook `detect-private-key`,
+  redundantes con `gitleaks` y origen de falsos positivos en cadena.
+- La allowlist es deliberadamente estrecha: matchea el placeholder literal, no la
+  plantilla entera. Una private key real en `secrets.toml.example` sigue fallando.
+- `make check-secrets` ahora corre `gitleaks`.
+
 ## [2.4.0] - 2026/07/16
 
 Reestructuración del repositorio. La app no cambió de comportamiento.
