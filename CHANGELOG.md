@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.5.1] - 2026/07/17
+
+### Changed
+- La key de Google se movió del Escritorio a `~/.config/rehab-strength/` (permisos
+  600). El `.env` apunta a la ruta nueva; `.env.example` documenta la convención.
+- `run_pipeline.sh` notifica con `osascript` nativo en vez de depender de
+  `NotifyGymPipeline.app`, que vivía en el Escritorio. La automatización ya no
+  referencia esa carpeta: se puede borrar sin romper nada.
+
 ## [2.5.0] - 2026/07/16
 
 ### Added

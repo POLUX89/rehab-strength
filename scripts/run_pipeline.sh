@@ -17,21 +17,15 @@ LOG="$HOME/Library/Logs/rehab_strength_pipeline.log"
 mkdir -p "$(dirname "$LOG")"
 echo "---- $(date) ---- ingesta automática (wake)" >>"$LOG"
 
-# La app de notificación es un applet de Automator; macOS ya le concedió permisos.
-# Se puede reubicar con REHAB_NOTIFY_APP en el .env.
-NOTIFY_APP="${REHAB_NOTIFY_APP:-$HOME/Desktop/GYM WORKOUT ANALYSIS PROJECT/NotifyGymPipeline.app}"
-
+# Notificación nativa de macOS, sin depender de ninguna app externa.
+# La primera vez macOS puede pedir permiso para notificaciones del intérprete.
 notify() {
-  if [ -d "$NOTIFY_APP" ]; then
-    open "$NOTIFY_APP" 2>/dev/null && return
-  fi
-  # Sin el applet, macOS puede pedir permiso para estas notificaciones.
   osascript -e "display notification \"$1\" with title \"🏋️ Rehab Strength\"" 2>/dev/null
 }
 
 if [ ! -x ".venv/bin/python" ]; then
   echo "❌ No existe .venv/bin/python. Corré: make setup" >>"$LOG"
-  osascript -e 'display notification "Falta el venv — corré make setup" with title "🏋️ Rehab Strength"' 2>/dev/null
+  notify "Falta el venv — corré make setup"
   exit 1
 fi
 
@@ -45,7 +39,7 @@ if [ $rc -eq 0 ]; then
 else
   # El pipeline viejo solo avisaba al terminar bien: si Google fallaba, silencio.
   echo "❌ Falló con código $rc" >>"$LOG"
-  osascript -e 'display notification "La ingesta falló — revisá el log" with title "🏋️ Rehab Strength"' 2>/dev/null
+  notify "La ingesta falló — revisá el log"
 fi
 
 exit $rc
