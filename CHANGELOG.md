@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.5.0] - 2026/07/16
+
+### Added
+- `scripts/run_pipeline.sh`: corre la ingesta completa, loguea y notifica por
+  macOS. Deriva la raíz del repo de su propia ubicación, sin rutas absolutas.
+  Reemplaza al `run_pipeline.sh` que vivía suelto en el Escritorio, fuera de git.
+- Notificación también cuando la ingesta **falla**. El script viejo solo avisaba
+  al terminar bien: si Google fallaba, no había aviso y los datos quedaban viejos
+  en silencio.
+- README: cómo enganchar el pipeline a sleepwatcher para que corra al despertar
+  el Mac, y enlace a la app desplegada.
+
+### Changed
+- Fuente de verdad única: los Excel y el pipeline viven en el repo. La carpeta
+  `GYM WORKOUT ANALYSIS PROJECT` del Escritorio queda como archivo histórico.
+- `~/.wakeup` (sleepwatcher) apunta al script del repo. El del Escritorio quedó
+  como `run_pipeline.sh.RETIRED` para que no corra en paralelo.
+
 ## [2.4.2] - 2026/07/16
 
 ### Fixed

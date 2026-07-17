@@ -1,5 +1,6 @@
 # 🏋️‍♂️ Rehab Strength Dashboard
 
+[![Live app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rehab-strength.streamlit.app)
 [![CI](https://github.com/POLUX89/Rehab_Strenght_App/actions/workflows/ci.yml/badge.svg)](https://github.com/POLUX89/Rehab_Strenght_App/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.53-FF4B4B.svg)](https://streamlit.io)
@@ -7,6 +8,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
 A personal analytics dashboard built with **Streamlit** to track **workouts, sleep, and recovery** over time, with a strong focus on **data integrity, transparency, and rehabilitation monitoring**.
+
+**▶️ Live app: [rehab-strength.streamlit.app](https://rehab-strength.streamlit.app)**
 
 ---
 ## 📸 Dashboard Preview
@@ -200,11 +203,38 @@ make ingest                # → data/processed/*.csv
 Place the Garmin exports (`HRV_status.xlsx`, `Sleep_garmin.xlsx`) and the Strong
 export (`strong.csv`) in `data/raw/` first. See [`data/README.md`](./data/README.md).
 
+Then upload the three regenerated CSVs to the app — the dashboard never reads the
+filesystem, only what you hand it.
+
 ```bash
 make test          # run the test suite
 make lint          # style checks
 make check-secrets # scan for leaked credentials
 ```
+
+### Running the pipeline automatically (macOS)
+
+[`scripts/run_pipeline.sh`](./scripts/run_pipeline.sh) runs the full ingestion, logs to
+`~/Library/Logs/rehab_strength_pipeline.log` and fires a macOS notification — including
+when it *fails*, so stale data never passes silently.
+
+Wire it to run whenever the Mac wakes up, using
+[sleepwatcher](https://formulae.brew.sh/formula/sleepwatcher):
+
+```bash
+brew install sleepwatcher
+brew services start sleepwatcher
+
+cat > ~/.wakeup <<'SH'
+#!/bin/zsh
+"$HOME/Documents/Project/Rehab_Strenght_App/scripts/run_pipeline.sh"
+SH
+chmod +x ~/.wakeup
+```
+
+The script resolves the repo root from its own location, so it works from any clone.
+Override the notification app with `REHAB_NOTIFY_APP`; without one it falls back to
+`osascript`.
 
 ---
 
