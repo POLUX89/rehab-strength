@@ -52,6 +52,7 @@ from app.helpers.transforms import (
     weekly_bucket,
 )
 from app.helpers.plots import correlation_insight, plot_line
+from app.tabs import recovery as recovery_tab
 
 st.set_page_config(page_title="Rehab Strength APP", layout="wide")
 st.title("🏋️‍♂️ Rehab Strength APP", text_alignment="center")
@@ -714,48 +715,7 @@ with tab2:
 # TAB 3 — RECOVERY
 # =========================
 with tab3:
-    st.header("🧠 Recovery")
-
-    if recovery is None:
-        st.info("Upload your clean recovery CSV to see charts.")
-    else:
-        if "Date" not in recovery.columns:
-            st.error("Recovery CSV must include a Date column.")
-        else:
-            recovery = recovery.sort_values("Date")
-
-            st.subheader("📋 Recovery table")
-            st.dataframe(recovery)
-
-            # Main recovery score (sigmoid)
-            if "Sigmoid Recovery Score" in recovery.columns:
-                st.subheader("🧠 Sigmoid Recovery Score (0–1)")
-                plot_line(
-                    recovery.dropna(subset=["Sigmoid Recovery Score"]),
-                    "Date",
-                    "Sigmoid Recovery Score",
-                    "Sigmoid Recovery Score over time",
-                    "Score", xlabel="", color="seagreen", rotate_x=True,
-                    date_locator=mdates.DayLocator(interval=2),
-                    date_formatter=mdates.DateFormatter('%b-%d')
-                )
-
-            # Components (choose what you want)
-            st.subheader("🧩 Components")
-            candidates = [
-                "Stress_prev_day",
-                "Overnight HRV",
-                "Resting Heart Rate",
-                "Score",
-                "RECOVERY_SCORE_RAW",
-            ]
-            available = [c for c in candidates if c in recovery.columns]
-            if available:
-                chosen = st.multiselect("Pick component(s) to plot:", available, default=available[:3])
-                for col in chosen:
-                    plot_line(recovery.dropna(subset=[col]), "Date", col, f"{col} over time", col)
-            else:
-                st.info("No component columns detected (Stress_prev_day / Overnight HRV / etc.).")
+    recovery = recovery_tab.render(recovery)
 
 # =========================
 # TAB 4 — Time Series Analysis
