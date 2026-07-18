@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+
+Rama **Classification** en Models (en progreso: Logistic Regression listo;
+Non Linear y Bagging & Boosting aún son stubs).
+
+### Added
+- Paquete `app/tabs/models/classification/`: el despachador construye el target
+  binario (`Score < 80` = clase 1 = "Bad Sleep") y el **split temporal** train/test
+  una sola vez, con gráficos de distribución de clases (total, train y test).
+- Sub-rama **Logistic Regression** (`logit.py`): tuning con `GridSearchCV` sobre
+  `TimeSeriesSplit` (CV que respeta el orden temporal, sin barajar). Pipeline
+  `StandardScaler → [SMOTE] → LogisticRegression(solver="saga")`; la regularización
+  se busca con `l1_ratio` (L2/L1/elastic-net), acorde a la deprecación de `penalty`
+  en scikit-learn 1.8. Scoring **F2** (prioriza recall de la clase minoritaria).
+- Panel de métricas train vs test (accuracy/precision/recall/F1/F2 con deltas),
+  classification report y matriz de confusión.
+- Toggle **SMOTE** opcional: remuestrea solo dentro de cada fold de CV (sin fuga a
+  validación/test) y, cuando está activo, fija `class_weight=None` para no corregir
+  el desbalance dos veces.
+- `@st.cache_data` en el tuning: no re-entrena si no cambian los datos ni el toggle.
+
+### Changed
+- Python fijado a **3.13**: `requires-python = ">=3.13,<3.14"`, ruff
+  `target-version = "py313"` y `.python-version`. Paridad con Streamlit Community
+  Cloud (tope 3.13) y cierra la puerta a que un resolver elija 3.14.
+- `models/__init__.py` enruta el tipo "Classification" a la nueva sub-rama.
+
+
 ## [2.6.0] - 2026/07/18
 
 Modularización del monolito. **La app no cambia de comportamiento** (verificado en

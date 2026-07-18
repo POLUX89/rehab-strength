@@ -13,7 +13,7 @@ import streamlit as st
 
 from app.helpers.transforms import string_to_decimal_hours
 
-from . import regression, unsupervised
+from . import classification, regression, unsupervised
 
 
 def render(time_series_analysis):
@@ -56,7 +56,8 @@ def render(time_series_analysis):
     )
     if types == "Regression":
         regression.render(df_model, predictors)
-
+    elif types == "Classification":
+        classification.render(df_model, predictors)
     # ---------------------------------- UNSUPERVISED LEARNING ----------------------------------
     elif types == "Unsupervised":
         unsupervised.render(df_model)

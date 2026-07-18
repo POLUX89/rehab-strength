@@ -7,7 +7,7 @@ name = "rehab-strength"
 version = "2.6.0"
 description = "Analítica personal de workouts, sueño y recuperación tras un ACV"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "POLUX89" }]
 
@@ -38,7 +38,7 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 # El monolito de la app se refactoriza en una fase aparte.
 extend-exclude = ["streamlit_app.py", "notebooks"]
 
