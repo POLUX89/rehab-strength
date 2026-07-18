@@ -47,4 +47,5 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "src" para el paquete rehab_strength; "." para los módulos app/ de la app Streamlit.
+pythonpath = ["src", "."]
