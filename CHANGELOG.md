@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.6.0] - 2026/07/18
+
+Modularización del monolito. **La app no cambia de comportamiento** (verificado en
+cada paso comparando el multiset de llamadas AST contra el original).
+
+### Changed
+- `streamlit_app.py` pasó de **3.217 a 243 líneas**: ahora es solo orquestación
+  (setup, sidebar, panel de carga y 7 llamadas `*_tab.render(...)`).
+- Helpers extraídos a `app/helpers/`: `stats.py`, `transforms.py`, `plots.py`.
+- Las 7 tabs extraídas a `app/tabs/`: home, workouts, sleep, recovery, timeseries,
+  stats y el paquete `models/`.
+- `models/` subdividido: `__init__` despacha por tipo de algoritmo; `unsupervised.py`
+  y el paquete `regression/` (despachador + `ols.py`, `linear.py`, `nonlinear.py`,
+  `ensemble.py`). El archivo más grande bajó de 3.217 a 1.137 líneas.
+- Los módulos de la app viven en `app/` (hermano del entrypoint), no en
+  `src/rehab_strength/`: Streamlit Cloud instala requirements pero no el paquete.
+- `app_version` de la UI alineado a V2.6.0.
+
+### Added
+- 61 tests nuevos sobre helpers y tabs (34 → 95 en total).
+- `per-file-ignores` de E501 para `app/tabs/*.py` (UI migrada con textos largos).
+
+
 ## [2.5.1] - 2026/07/17
 
 ### Changed
