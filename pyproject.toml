@@ -45,6 +45,13 @@ extend-exclude = ["streamlit_app.py", "notebooks"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Las tabs son UI migrada del monolito (streamlit_app.py, excluido de ruff). Se
+# lintean para todo menos E501: conservan sus líneas largas heredadas (textos de
+# ayuda al usuario, llamadas a gráficos) sin reescribir mensajes ni arriesgar el
+# comportamiento. El core (helpers, ingest, src) mantiene el estándar completo.
+"app/tabs/*.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # "src" para el paquete rehab_strength; "." para los módulos app/ de la app Streamlit.
