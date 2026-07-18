@@ -11,6 +11,9 @@ A personal analytics dashboard built with **Streamlit** to track **workouts, sle
 
 **▶️ Live app: [rehab-strength.streamlit.app](https://rehab-strength.streamlit.app)**
 
+## 🎥 Demo.
+https://github.com/user-attachments/assets/7041db62-8f85-4449-a515-f1960cbdb90b
+
 ---
 ## 📸 Dashboard Preview
 
