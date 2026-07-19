@@ -1,25 +1,37 @@
 # Changelog
 
-## [Unreleased]
+## [2.7.0] - 2026/07/19
 
-Rama **Classification** en Models (en progreso: Logistic Regression listo;
-Non Linear y Bagging & Boosting aún son stubs).
+Rama **Classification** completa en Models, con sus tres sub-ramas: Logistic
+Regression, Non Linear (DT/KNN/SVM) y Bagging & Boosting (RF/GB/AdaBoost). Toda
+la metodología es anti-fuga: split temporal (sin barajar), `TimeSeriesSplit` en
+la CV, y scaler/SMOTE dentro del pipeline (solo el train de cada fold). Métrica
+de selección: **F2** (prioriza recall de "Bad Sleep", la clase minoritaria).
 
 ### Added
 - Paquete `app/tabs/models/classification/`: el despachador construye el target
   binario (`Score < 80` = clase 1 = "Bad Sleep") y el **split temporal** train/test
-  una sola vez, con gráficos de distribución de clases (total, train y test).
-- Sub-rama **Logistic Regression** (`logit.py`): tuning con `GridSearchCV` sobre
-  `TimeSeriesSplit` (CV que respeta el orden temporal, sin barajar). Pipeline
-  `StandardScaler → [SMOTE] → LogisticRegression(solver="saga")`; la regularización
-  se busca con `l1_ratio` (L2/L1/elastic-net), acorde a la deprecación de `penalty`
-  en scikit-learn 1.8. Scoring **F2** (prioriza recall de la clase minoritaria).
-- Panel de métricas train vs test (accuracy/precision/recall/F1/F2 con deltas),
+  una sola vez, con gráficos de distribución de clases y un guard de muestras
+  mínimas (`st.warning` + `st.stop` en vez del ValueError crudo de sklearn).
+- Sub-rama **Logistic Regression** (`logit.py`): `GridSearchCV` sobre
+  `TimeSeriesSplit`; pipeline `StandardScaler → [SMOTE] → LogisticRegression(saga)`;
+  regularización vía `l1_ratio` (L2/L1/elastic-net), acorde a la deprecación de
+  `penalty` en scikit-learn 1.8. Gráfica F2 train vs test, métricas 5×2 con deltas,
   classification report y matriz de confusión.
-- Toggle **SMOTE** opcional: remuestrea solo dentro de cada fold de CV (sin fuga a
-  validación/test) y, cuando está activo, fija `class_weight=None` para no corregir
-  el desbalance dos veces.
-- `@st.cache_data` en el tuning: no re-entrena si no cambian los datos ni el toggle.
+- Sub-rama **Non Linear** (`nonlinear_classification.py`): Decision Tree, KNN y
+  SVM. KNN y SVM escalados; el árbol no lo necesita. Tabla de métricas, ganador por
+  F2 con su matriz de confusión, comparativo F2 por modelo y grillas 5×2.
+- Sub-rama **Bagging & Boosting** (`ensemble_classification.py`): Random Forest,
+  Gradient Boosting y AdaBoost (base DT o SVC, con params anidados). Reutiliza los
+  helpers de Non Linear (`_build_pipe`, `_row`, `metrics_table`, `graph_winner`).
+- Manejo de desbalance **simétrico** en las tres ramas: con SMOTE off,
+  `class_weight="balanced"` en los modelos que lo soportan; con SMOTE on, se omite
+  para no corregir dos veces. KNN y Gradient Boosting no tienen `class_weight` (solo
+  se balancean con SMOTE) — se avisa en la UI.
+- `@st.cache_data` en cada tuning: no re-entrena si no cambian los datos ni el
+  toggle SMOTE.
+- Tests de la tab Classification: target binario, split temporal y delegación en
+  cada sub-rama (con mock, sin entrenar).
 
 ### Changed
 - Python fijado a **3.13**: `requires-python = ">=3.13,<3.14"`, ruff
@@ -29,6 +41,8 @@ Non Linear y Bagging & Boosting aún son stubs).
   de un `3.12` hardcodeado, que rompía `pip install -e .` contra el nuevo
   `requires-python`. Una sola fuente de verdad, sin desincronización futura.
 - `models/__init__.py` enruta el tipo "Classification" a la nueva sub-rama.
+- Docstrings Google-style en inglés para todas las funciones de `app/` y `src/`.
+- `app_version` de la UI alineado a V2.7.0.
 
 
 ## [2.6.0] - 2026/07/18
