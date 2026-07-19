@@ -27,6 +27,12 @@ if [ -d "$INBOX" ]; then
   echo "📥 buzón -> data/raw ($INBOX)" >>"$LOG"
 fi
 
+# Espejo de salida (iCloud): tras una ingesta OK se publican aquí los 3 CSV
+# procesados, para poder subirlos a la app desde el móvil (que no ve ~/dev).
+# Mismo nivel de privacidad que el inbox: iCloud privado, nunca git. Overridable
+# con REHAB_OUTBOX.
+OUTBOX="${REHAB_OUTBOX:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/rehab-processed}"
+
 # Notificación nativa de macOS, sin depender de ninguna app externa.
 # La primera vez macOS puede pedir permiso para notificaciones del intérprete.
 notify() {
@@ -45,7 +51,16 @@ rc=$?
 
 if [ $rc -eq 0 ]; then
   echo "✅ OK" >>"$LOG"
-  notify "GYM Pipeline completed successfully!"
+  # Publicar los procesados al outbox de iCloud (solo si la ingesta fue OK, para
+  # no exponer archivos parciales). El móvil los toma de ahí para subirlos.
+  PROCESSED_DIR="${REHAB_DATA_DIR:-$REPO/data}/processed"
+  mkdir -p "$OUTBOX" 2>/dev/null \
+    && cp "$PROCESSED_DIR"/clean_strong_workouts.csv \
+          "$PROCESSED_DIR"/clean_sleep_data.csv \
+          "$PROCESSED_DIR"/clean_recovery_data.csv "$OUTBOX"/ 2>>"$LOG" \
+    && echo "📤 procesados -> outbox ($OUTBOX)" >>"$LOG" \
+    || echo "⚠️ no se pudieron publicar los procesados al outbox" >>"$LOG"
+  notify "Pipeline OK — CSVs procesados sincronizados a iCloud"
 else
   # El pipeline viejo solo avisaba al terminar bien: si Google fallaba, silencio.
   echo "❌ Falló con código $rc" >>"$LOG"
