@@ -83,12 +83,32 @@ def test_render_stops_when_not_enough_samples(monkeypatch):
     fake_logit.assert_not_called()
 
 
-def test_render_stub_branches_show_placeholder(monkeypatch):
-    m = _mock_st(monkeypatch, branch="Non Linear Models")
+def test_render_delegates_to_nonlinear(monkeypatch):
+    # La rama Non Linear ya no es stub: se mockea su render (el entrenamiento
+    # real con GridSearchCV queda fuera del alcance de estos tests).
+    _mock_st(monkeypatch, branch="Non Linear Models")
     fake_logit = MagicMock()
+    fake_nonlinear = MagicMock()
     monkeypatch.setattr(classification_tab.logit, "render", fake_logit)
+    monkeypatch.setattr(classification_tab.nonlinear_classification, "render", fake_nonlinear)
+
+    classification_tab.render(_df_model(60), PREDICTORS)
+
+    fake_nonlinear.assert_called_once()
+    assert set(fake_nonlinear.call_args.args[0]) == {"X_train", "X_test", "y_train", "y_test"}
+    fake_logit.assert_not_called()
+
+
+def test_render_stub_branch_shows_placeholder(monkeypatch):
+    # Bagging & Boosting sigue siendo stub: muestra el placeholder "coming soon".
+    m = _mock_st(monkeypatch, branch="Bagging & Boosting Models")
+    fake_logit = MagicMock()
+    fake_nonlinear = MagicMock()
+    monkeypatch.setattr(classification_tab.logit, "render", fake_logit)
+    monkeypatch.setattr(classification_tab.nonlinear_classification, "render", fake_nonlinear)
 
     classification_tab.render(_df_model(60), PREDICTORS)
 
     assert m.info.called  # placeholder "coming soon"
     fake_logit.assert_not_called()
+    fake_nonlinear.assert_not_called()
