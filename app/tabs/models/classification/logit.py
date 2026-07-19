@@ -90,6 +90,45 @@ def _tune_logit(split, synthetic=False):
     return grid.best_estimator_, grid.best_params_, grid.best_score_, elapsed
 
 
+def _plot_f2_train_test(f2_train, f2_test):
+    """Bar chart comparing the model's F2 score on train vs test.
+
+    A large train-over-test gap flags overfitting at a glance.
+
+    Args:
+        f2_train: F2 score on the training set.
+        f2_test: F2 score on the test set.
+
+    Returns:
+        None. Draws the chart with ``st.pyplot``.
+    """
+    fig, ax = plt.subplots(figsize=(4, 3))
+    sns.barplot(
+        x=["Train", "Test"],
+        y=[f2_train, f2_test],
+        hue=["Train", "Test"],
+        palette="icefire",
+        legend=False,
+        ax=ax,
+    )
+    for bar in ax.patches:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("F2 Score", fontweight="bold")
+    ax.set_title("F2 Score: Train vs Test", fontweight="bold")
+    sns.despine()
+    st.pyplot(fig)
+    plt.close(fig)
+
+
 def render(split):
     """Render the Logistic Regression sub-branch.
 
@@ -149,6 +188,9 @@ def render(split):
         f1_train = f1_score(y_train, y_pred_train, zero_division=0)
         f1_test = f1_score(y_test, y_pred, zero_division=0)
         f2_train = fbeta_score(y_train, y_pred_train, beta=2, zero_division=0)
+
+        st.subheader("F2 Score: Train vs Test", divider=True)
+        _plot_f2_train_test(f2_train, f2_test)
 
         st.subheader("📈 Train Set Performance")
         c1, c2, c3, c4, c5 = st.columns(5)
