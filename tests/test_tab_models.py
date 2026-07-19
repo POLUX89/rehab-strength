@@ -64,7 +64,10 @@ def test_render_initial_prep_runs(monkeypatch):
     # preparación inicial (re-lee recovery, arma df_model, muestra el veredicto TSA).
     m = MagicMock()
     m.session_state = _SessionState(df_recovery=_recovery_df())
-    m.selectbox.return_value = "Classification"  # rama vacía -> no entrena nada
+    # La rama Classification ya no está vacía: se mockea el submódulo para que
+    # este test siga siendo solo de preparación + despacho (la lógica interna
+    # se cubre en test_tab_classification.py).
+    m.selectbox.return_value = "Classification"
     m.button.return_value = False
     m.checkbox.return_value = False
     m.segmented_control.return_value = "OLS diagnosis"
@@ -72,6 +75,9 @@ def test_render_initial_prep_runs(monkeypatch):
         MagicMock() for _ in range(spec if isinstance(spec, int) else len(spec))
     )
     monkeypatch.setattr(models_tab, "st", m)
+    fake_classification = MagicMock()
+    monkeypatch.setattr(models_tab, "classification", fake_classification)
     models_tab.render("Stationary")  # no debe lanzar
-    # el veredicto TSA recibido se muestra
+    # el veredicto TSA recibido se muestra y la rama delega en classification
     assert m.success.called
+    fake_classification.render.assert_called_once()

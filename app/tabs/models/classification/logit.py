@@ -31,15 +31,36 @@ from sklearn.preprocessing import StandardScaler
 
 
 def _synthetic():
+    """Render the SMOTE toggle checkbox.
+
+    Returns:
+        True if the user enabled SMOTE oversampling, else False.
+    """
     return st.checkbox(
-        "Synthetic data for testing SMOTE",
+        "Balance classes with SMOTE (experimental)",
         False,
         key="logit_smote_toggle",
     )
 
 
-@st.cache_data(show_spinner="Tuning logit… (una vez por dataset)")
+@st.cache_data(show_spinner="Tuning logit… (runs once per dataset)")
 def _tune_logit(split, synthetic=False):
+    """Tune a logistic regression with time-aware cross-validation.
+
+    Builds a ``StandardScaler → [SMOTE] → LogisticRegression(saga)`` pipeline
+    and grid-searches over C, class weight and ``l1_ratio`` using
+    ``TimeSeriesSplit`` and the F2 score. Cached on its arguments, so it only
+    retrains when the data or the SMOTE toggle change.
+
+    Args:
+        split: Dict with ``X_train``/``y_train``/``X_test``/``y_test``.
+        synthetic: If True, add SMOTE to the pipeline and drop ``class_weight``
+            balancing to avoid double-correcting the imbalance.
+
+    Returns:
+        A ``(best_estimator, best_params, best_cv_score, elapsed_seconds)``
+        tuple, where ``best_cv_score`` is the best F2 from cross-validation.
+    """
     f2 = make_scorer(fbeta_score, beta=2)
     time0 = time.time()
     X_train, y_train = split["X_train"], split["y_train"]
@@ -70,6 +91,18 @@ def _tune_logit(split, synthetic=False):
 
 
 def render(split):
+    """Render the Logistic Regression sub-branch.
+
+    Trains via :func:`_tune_logit` (with the SMOTE toggle), then shows the
+    best hyperparameters, the classification report, the confusion matrix and
+    train-vs-test performance metrics.
+
+    Args:
+        split: Dict with ``X_train``/``y_train``/``X_test``/``y_test``.
+
+    Returns:
+        None.
+    """
     st.title("Logistic Regression Model")
     X_test, y_test = split["X_test"], split["y_test"]
     synthetic = _synthetic()
@@ -78,10 +111,12 @@ def render(split):
     with st.expander("📈 Training Metrics: Train vs Test", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("Mejores hiperparámetros:", divider=True)
+            st.subheader("Best hyperparameters:", divider=True)
             st.write(best_params)
-            st.caption(f"Entrenado en {elapsed:.2f}s (cacheado si no cambian datos ni toggle).")
-            st.write(f"F2 score (CV temporal): {best_cv:.3f}")
+            st.caption(
+                f"Trained in {elapsed:.2f}s (cached unless data or the SMOTE toggle change)."
+            )
+            st.write(f"F2 score (temporal CV): {best_cv:.3f}")
             y_pred = model_logit.predict(X_test)
             f2_test = fbeta_score(y_test, y_pred, beta=2, zero_division=0)
             st.write(f"F2 score (test): {f2_test:.3f}")

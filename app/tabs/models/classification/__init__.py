@@ -19,11 +19,33 @@ from . import logit
 # knn, dt, svm
 # rf, adaboost
 def render(df_model, predictors):
+    """Render the Classification dispatcher.
+
+    Builds the binary target (``Score < 80`` → 1 = "Bad Sleep") and the
+    temporal train/test split once, plots the class distributions, then
+    delegates to the chosen model sub-branch (logit, nonlinear, ensemble).
+
+    Args:
+        df_model: Model-ready DataFrame including ``Score`` and predictors.
+        predictors: Predictor column names.
+
+    Returns:
+        None.
+    """
     # Design target variable for classification: Score < 80 (1) vs Score >= 80 (0)
     df_model["Score_binary"] = (df_model["Score"] < 80).astype(
         int
     )  # Binary target: 1 if Score < 80, else 0
-    H = 40
+    H = 40  # temporal test window (rows)
+    MIN_TRAIN = 10
+    if len(df_model) < H + MIN_TRAIN:
+        st.warning(
+            f"Not enough samples for classification: {len(df_model)} rows available, "
+            f"but the temporal split needs at least {H + MIN_TRAIN} "
+            f"({H} test + {MIN_TRAIN} train). Load more data.",
+            icon="⚠️",
+        )
+        st.stop()
     X = df_model[predictors]
     y = df_model["Score_binary"]  # Binary target: 1 if Score < 80, else 0
     X_train, X_test, y_train, y_test = train_test_split(
@@ -123,8 +145,8 @@ def render(df_model, predictors):
     if models == "Logistic Regression":
         logit.render(split)
     elif models == "Non Linear Models":
-        pass
+        st.info("🚧 Non Linear Models (KNN, Decision Tree, SVM) — coming soon.")
         # nonlinear.render(split)
     elif models == "Bagging & Boosting Models":
-        pass
+        st.info("🚧 Bagging & Boosting Models (Random Forest, AdaBoost) — coming soon.")
         # ensemble.render(split)
