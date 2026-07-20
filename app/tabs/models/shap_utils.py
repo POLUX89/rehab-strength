@@ -32,7 +32,7 @@ _TREE_MODELS = (
 
 
 @st.cache_data(show_spinner="Computing SHAP values… (cached per dataset)")
-def compute_shap_values(_model, X_background, X_explain, _predict_fn=None):
+def compute_shap_values(_model, X_background, X_explain, _predict_fn=None, cache_key=None):
     """Compute SHAP values for a fitted pipeline's champion, cached per dataset.
 
     Routes by the final estimator's type: tree-based additive models use
@@ -41,8 +41,11 @@ def compute_shap_values(_model, X_background, X_explain, _predict_fn=None):
     prediction function, which yields attributions in the original predictors.
 
     ``_model`` and ``_predict_fn`` are passed unhashed (leading underscore):
-    both are determined by the same data, so hashing ``X_background`` and
-    ``X_explain`` is enough to key the cache.
+    the cache is keyed on ``X_background``, ``X_explain`` and ``cache_key``.
+    That suffices when the model is determined by the data alone — but when it
+    also depends on something else with the SAME data (e.g. a SMOTE toggle in
+    classification), pass that value as ``cache_key`` so toggling actually
+    recomputes instead of returning a stale Explanation.
 
     Assumption: tree pipelines do NOT transform features (no scaler), so the
     tree sees the original predictors and TreeExplainer can run on the raw X.
@@ -57,6 +60,9 @@ def compute_shap_values(_model, X_background, X_explain, _predict_fn=None):
         _predict_fn: Optional prediction function for the model-agnostic route
             (e.g. ``model.predict_proba`` in classification). Defaults to
             ``_model.predict`` (not hashed).
+        cache_key: Optional hashable disambiguating the cache when the model
+            depends on more than the data (e.g. a UI toggle). Not used in the
+            body — only to key the cache.
 
     Returns:
         A SHAP ``Explanation`` for ``X_explain``.

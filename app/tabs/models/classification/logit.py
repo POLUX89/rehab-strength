@@ -12,6 +12,7 @@ import time
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+import shap
 import streamlit as st
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
@@ -28,6 +29,8 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
+
+from app.tabs.models.shap_utils import compute_shap_values
 
 
 def _synthetic():
@@ -223,3 +226,45 @@ def render(split):
             st.metric("F1 Score", f"{f1_test:.3f}", delta=f"{f1_test - f1_train:+.3f}")
         with c5:
             st.metric("F2 Score", f"{f2_test:.3f}", delta=f"{f2_test - f2_train:+.3f}")
+
+    with st.expander("📊 Explanatory Power of Predictors", expanded=True):
+        st.subheader("📊 Explanatory Power of Predictors")
+        st.caption(
+            "SHAP over the model's predicted **probability of Bad Sleep** — how much "
+            "each predictor pushes that risk up or down."
+        )
+        # LogisticRegression → model-agnostic route. Explain P(Bad Sleep) (the
+        # positive class), not the hard 0/1 label. cache_key=synthetic so
+        # toggling SMOTE recomputes instead of returning a stale Explanation.
+        X_background = shap.sample(split["X_train"], 100, random_state=42)
+        shap_values = compute_shap_values(
+            model_logit,
+            X_background,
+            X_test,
+            _predict_fn=lambda X: model_logit.predict_proba(X)[:, 1],
+            cache_key=synthetic,
+        )
+        sample_ind = -1  # last sample in the test set
+
+        force_plot = shap.plots.force(shap_values[sample_ind], matplotlib=True, show=False)
+        plt.title(f"SHAP Force Plot for last sample {X_test.index[sample_ind]}")
+        st.pyplot(force_plot)
+        plt.close(force_plot)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            shap.plots.beeswarm(shap_values, show=False)
+            st.pyplot(fig)
+            plt.close(fig)
+            fig, ax = plt.subplots(figsize=(8, 5))
+            shap.plots.bar(shap_values, max_display=14, show=False)
+            plt.title("Mean Absolute SHAP Values")
+            st.pyplot(fig)
+            plt.close(fig)
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 5))
+            shap.plots.waterfall(shap_values[sample_ind], max_display=14, show=False)
+            plt.title(f"SHAP Waterfall Plot for last sample {X_test.index[sample_ind]}")
+            st.pyplot(fig)
+            plt.close(fig)
