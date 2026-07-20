@@ -402,7 +402,9 @@ def render(df_model, predictors):
         # Background dataset for SHAP values
         X_background = shap.sample(train_lin[predictors], 100, random_state=42)
         # Cached: SHAP no se recalcula si no cambian los datos.
-        shap_values = compute_shap_values(best_linear, X_background, test_lin[predictors])
+        shap_values = compute_shap_values(
+            best_linear, X_background, test_lin[predictors], cache_key="reg_linear"
+        )
         sample_ind = -1  # Last sample in the test set
 
         force_plot = shap.plots.force(shap_values[sample_ind], matplotlib=True, show=False)

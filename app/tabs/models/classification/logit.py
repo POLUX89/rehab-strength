@@ -241,8 +241,8 @@ def render(split):
             model_logit,
             X_background,
             X_test,
+            cache_key=("cla_logit", synthetic),
             _predict_fn=lambda X: model_logit.predict_proba(X)[:, 1],
-            cache_key=synthetic,
         )
         sample_ind = -1  # last sample in the test set
 

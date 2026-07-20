@@ -392,7 +392,7 @@ def render(df_model, predictors):
         X_background = shap.sample(train_lin[predictors], 100, random_state=42)
         # Cached; TreeExplainer if the winner is a tree, else model-agnostic.
         shap_values_non_linear = compute_shap_values(
-            best_model_non_linear, X_background, test_lin[predictors]
+            best_model_non_linear, X_background, test_lin[predictors], cache_key="reg_nonlinear"
         )
         sample_ind = -1  # last sample in the test set
 
