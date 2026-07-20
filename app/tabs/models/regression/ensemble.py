@@ -13,12 +13,15 @@ import pandas as pd
 import seaborn as sns
 import shap
 import streamlit as st
+from sklearn.ensemble import AdaBoostRegressor, GradientBoostingRegressor, RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
+
+from app.tabs.models.shap_utils import compute_shap_values
 
 
 def render(df_model, predictors):
@@ -51,11 +54,6 @@ def render(df_model, predictors):
         """
         results = []
         # ------------------ RF ---------------------------
-        from sklearn.ensemble import (
-            AdaBoostRegressor,
-            GradientBoostingRegressor,
-            RandomForestRegressor,
-        )
 
         pipe_rf = Pipeline([("rf", RandomForestRegressor(criterion="squared_error", n_jobs=4))])
         grid_rf = GridSearchCV(
@@ -109,19 +107,15 @@ def render(df_model, predictors):
         y_pred_test_ada = best_ada.predict(X_test)
 
         # ------------------ Gradient Boosting ---------------------------
-        pipe_gb = Pipeline(
-            [
-                ("scaler", StandardScaler()),
-                ("gb", GradientBoostingRegressor(loss="squared_error")),
-            ]
-        )
+        pipe_gb = Pipeline([("gb", GradientBoostingRegressor(loss="squared_error"))])
         grid_gb = GridSearchCV(
             pipe_gb,
             param_grid={
                 "gb__learning_rate": np.logspace(-3, 0, 10),
                 "gb__n_estimators": [100, 200, 300],
                 "gb__max_depth": [3, 4, 5],
-                "gb__max_features": ["auto", "sqrt", "log2"],
+                # None = all features (the old "auto", removed in sklearn 1.3+).
+                "gb__max_features": [None, "sqrt", "log2"],
                 "gb__subsample": [0.6, 0.8, 1.0],
             },
             cv=5,
@@ -395,22 +389,40 @@ def render(df_model, predictors):
             model=best_model_ensemble,
         )
     # --------------------------- EXPLANATORY POWER -----------------------------
-    with st.expander("📊 Explanatory Power of Predictors", expanded=False):
+    with st.expander("📊 Explanatory Power of Predictors", expanded=True):
         st.subheader("📊 Explanatory Power of Predictors")
         # Background dataset — small sample is enough for speed
-        X_background = shap.sample(train_lin[predictors], 100)
+        X_background = shap.sample(train_lin[predictors], 100, random_state=42)
+        # Cached; TreeExplainer if the winner is a tree, else model-agnostic.
+        shap_values_non_linear = compute_shap_values(
+            best_model_ensemble, X_background, test_lin[predictors]
+        )
+        sample_ind = -1  # last sample in the test set
 
-        explainer_ensemble = shap.Explainer(best_model_ensemble.predict, X_background)
-        shap_values_ensemble = explainer_ensemble(test_lin[predictors])
+        force_plot = shap.plots.force(
+            shap_values_non_linear[sample_ind], matplotlib=True, show=False
+        )
+        plt.title(f"SHAP Force Plot for last sample {test_lin.index[sample_ind]}")
+        st.pyplot(force_plot)
+        plt.close(force_plot)
+
         col1, col2 = st.columns(2)
         with col1:
             # Beeswarm
             fig, ax = plt.subplots(figsize=(10, 5))
-            shap.plots.beeswarm(shap_values_ensemble, show=False)
+            shap.plots.beeswarm(shap_values_non_linear, show=False)
             st.pyplot(fig)
-        with col2:
-            # Waterfall
-            sample_ind = 0
+            plt.close(fig)
+            # Mean absolute SHAP values
             fig, ax = plt.subplots(figsize=(8, 5))
-            shap.plots.waterfall(shap_values_ensemble[sample_ind], max_display=14, show=False)
+            shap.plots.bar(shap_values_non_linear, max_display=14, show=False)
+            plt.title("Mean Absolute SHAP Values")
             st.pyplot(fig)
+            plt.close(fig)
+        with col2:
+            # Waterfall for the last sample in the test set
+            fig, ax = plt.subplots(figsize=(8, 5))
+            shap.plots.waterfall(shap_values_non_linear[sample_ind], max_display=14, show=False)
+            plt.title(f"SHAP Waterfall Plot for last sample {test_lin.index[sample_ind]}")
+            st.pyplot(fig)
+            plt.close(fig)

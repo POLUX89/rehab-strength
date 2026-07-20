@@ -19,26 +19,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
-
-@st.cache_data(show_spinner="Computing SHAP values… (cached per dataset)")
-def _compute_shap_values(_model, X_background, X_explain):
-    """Compute model-agnostic SHAP values for a fitted estimator.
-
-    Wrapping this in ``@st.cache_data`` avoids recomputing SHAP — the expensive
-    step — on every Streamlit rerun. ``_model`` is passed unhashed (leading
-    underscore): it is deterministic given the same data, so hashing
-    ``X_background`` and ``X_explain`` is enough to key the cache.
-
-    Args:
-        _model: Fitted estimator/pipeline exposing ``predict`` (not hashed).
-        X_background: Background sample used by the explainer.
-        X_explain: Rows to explain.
-
-    Returns:
-        A SHAP ``Explanation`` for ``X_explain``.
-    """
-    explainer = shap.Explainer(_model.predict, X_background)
-    return explainer(X_explain)
+from app.tabs.models.shap_utils import compute_shap_values
 
 
 def render(df_model, predictors):
@@ -421,7 +402,7 @@ def render(df_model, predictors):
         # Background dataset for SHAP values
         X_background = shap.sample(train_lin[predictors], 100, random_state=42)
         # Cached: SHAP no se recalcula si no cambian los datos.
-        shap_values = _compute_shap_values(best_linear, X_background, test_lin[predictors])
+        shap_values = compute_shap_values(best_linear, X_background, test_lin[predictors])
         sample_ind = -1  # Last sample in the test set
 
         force_plot = shap.plots.force(shap_values[sample_ind], matplotlib=True, show=False)

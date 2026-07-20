@@ -21,34 +21,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
-
-@st.cache_data(show_spinner="Computing SHAP values… (cached per dataset)")
-def _compute_shap_values(_model, X_background, X_explain):
-    """Compute SHAP values for the winning non-linear model.
-
-    Picks the explainer by model type: ``shap.TreeExplainer`` when the winner is
-    a decision tree (fast and exact), else the model-agnostic explainer for
-    KNN/SVR. Both yield attributions in the original predictors — the tree
-    pipeline has no feature transform, and the agnostic route explains
-    ``model.predict`` on the original X.
-
-    Cached like in ``linear.py``: ``_model`` is passed unhashed (leading
-    underscore); the data keys the cache.
-
-    Args:
-        _model: Winning pipeline exposing ``predict`` (not hashed).
-        X_background: Background sample used by the explainer.
-        X_explain: Rows to explain.
-
-    Returns:
-        A SHAP ``Explanation`` for ``X_explain``.
-    """
-    final_estimator = _model[-1]  # last pipeline step
-    if isinstance(final_estimator, DecisionTreeRegressor):
-        explainer = shap.TreeExplainer(final_estimator, X_background)
-    else:
-        explainer = shap.Explainer(_model.predict, X_background)
-    return explainer(X_explain)
+from app.tabs.models.shap_utils import compute_shap_values
 
 
 def render(df_model, predictors):
@@ -418,7 +391,7 @@ def render(df_model, predictors):
         # Background dataset — small sample is enough for speed
         X_background = shap.sample(train_lin[predictors], 100, random_state=42)
         # Cached; TreeExplainer if the winner is a tree, else model-agnostic.
-        shap_values_non_linear = _compute_shap_values(
+        shap_values_non_linear = compute_shap_values(
             best_model_non_linear, X_background, test_lin[predictors]
         )
         sample_ind = -1  # last sample in the test set
