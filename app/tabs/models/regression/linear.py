@@ -20,6 +20,27 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
 
+@st.cache_data(show_spinner="Computing SHAP values… (cached per dataset)")
+def _compute_shap_values(_model, X_background, X_explain):
+    """Compute model-agnostic SHAP values for a fitted estimator.
+
+    Wrapping this in ``@st.cache_data`` avoids recomputing SHAP — the expensive
+    step — on every Streamlit rerun. ``_model`` is passed unhashed (leading
+    underscore): it is deterministic given the same data, so hashing
+    ``X_background`` and ``X_explain`` is enough to key the cache.
+
+    Args:
+        _model: Fitted estimator/pipeline exposing ``predict`` (not hashed).
+        X_background: Background sample used by the explainer.
+        X_explain: Rows to explain.
+
+    Returns:
+        A SHAP ``Explanation`` for ``X_explain``.
+    """
+    explainer = shap.Explainer(_model.predict, X_background)
+    return explainer(X_explain)
+
+
 def render(df_model, predictors):
     """Render the Other Linear Models sub-branch.
 
@@ -340,12 +361,12 @@ def render(df_model, predictors):
 
             sns.barplot(
                 x=["Train", "Test"],
-                y=[train_mse_mean.mean(), test_mse_mean.mean()],
+                y=[train_mse_mean[-1], test_mse_mean[-1]],
                 ax=ax[1],
                 palette=["lightblue", "orange"],
             )
             ax[1].set_title(
-                "Average RMSE at Different Training Sizes",
+                "Final RMSE (Full Training Set)",
                 fontweight="bold",
                 fontsize=8,
                 pad=15,
@@ -395,22 +416,36 @@ def render(df_model, predictors):
         )
 
     # --------------------------- EXPLANATORY POWER -----------------------------
-    with st.expander("📊 Explanatory Power of Predictors", expanded=False):
+    with st.expander("📊 Explanatory Power of Predictors", expanded=True):
         st.subheader("📊 Explanatory Power of Predictors")
-        # Background dataset — small sample is enough for speed
-        X_background = shap.sample(train_lin[predictors], 50)
+        # Background dataset for SHAP values
+        X_background = shap.sample(train_lin[predictors], 100, random_state=42)
+        # Cached: SHAP no se recalcula si no cambian los datos.
+        shap_values = _compute_shap_values(best_linear, X_background, test_lin[predictors])
+        sample_ind = -1  # Last sample in the test set
 
-        explainer = shap.Explainer(best_linear.predict, X_background)
-        shap_values = explainer(test_lin[predictors])
+        force_plot = shap.plots.force(shap_values[sample_ind], matplotlib=True, show=False)
+        plt.title(f"SHAP Force Plot for last sample {test_lin.index[sample_ind]}")
+        st.pyplot(force_plot)
+        plt.close(force_plot)
         col1, col2 = st.columns(2)
         with col1:
             # Beeswarm
             fig, ax = plt.subplots(figsize=(10, 5))
             shap.plots.beeswarm(shap_values, show=False)
             st.pyplot(fig)
+            plt.close(fig)
+            # bar plot of mean absolute SHAP values
+            fig, ax = plt.subplots(figsize=(8, 5))
+            shap.plots.bar(shap_values, max_display=14, show=False)
+            plt.title("Mean Absolute SHAP Values")
+            st.pyplot(fig)
+            plt.close(fig)
+
         with col2:
-            # Waterfall
-            sample_ind = 0
+            # Waterfall for the last sample in the test set
             fig, ax = plt.subplots(figsize=(8, 5))
             shap.plots.waterfall(shap_values[sample_ind], max_display=14, show=False)
+            plt.title(f"SHAP Waterfall Plot for last sample {test_lin.index[sample_ind]}")
             st.pyplot(fig)
+            plt.close(fig)

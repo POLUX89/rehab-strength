@@ -341,12 +341,12 @@ def render(df_model, predictors):
 
             sns.barplot(
                 x=["Train", "Test"],
-                y=[train_mse_mean.mean(), test_mse_mean.mean()],
+                y=[train_mse_mean[-1], test_mse_mean[-1]],
                 ax=ax[1],
                 palette=["lightblue", "orange"],
             )
             ax[1].set_title(
-                "Average RMSE at Different Training Sizes",
+                "Final RMSE (Full Training Set)",
                 fontweight="bold",
                 fontsize=8,
                 pad=15,

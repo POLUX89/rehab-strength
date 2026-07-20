@@ -330,12 +330,12 @@ def render(df_model, predictors):
 
             sns.barplot(
                 x=["Train", "Test"],
-                y=[train_mse_mean.mean(), test_mse_mean.mean()],
+                y=[train_mse_mean[-1], test_mse_mean[-1]],
                 ax=ax[1],
                 palette=["lightblue", "orange"],
             )
             ax[1].set_title(
-                "Average RMSE at Different Training Sizes",
+                "Final RMSE (Full Training Set)",
                 fontweight="bold",
                 fontsize=8,
                 pad=15,
@@ -388,7 +388,6 @@ def render(df_model, predictors):
         st.subheader("📊 Explanatory Power of Predictors")
         # Background dataset — small sample is enough for speed
         X_background = shap.sample(train_lin[predictors], 100)
-
         explainer_non_linear = shap.Explainer(best_model_non_linear.predict, X_background)
         shap_values_non_linear = explainer_non_linear(test_lin[predictors])
         col1, col2 = st.columns(2)
