@@ -1,7 +1,7 @@
 # 🏋️‍♂️ Rehab Strength Dashboard
 
 [![Live app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rehab-strength.streamlit.app)
-[![CI](https://github.com/POLUX89/Rehab_Strenght_App/actions/workflows/ci.yml/badge.svg)](https://github.com/POLUX89/Rehab_Strenght_App/actions/workflows/ci.yml)
+[![CI](https://github.com/POLUX89/rehab-strength/actions/workflows/ci.yml/badge.svg)](https://github.com/POLUX89/rehab-strength/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.53-FF4B4B.svg)](https://streamlit.io)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
@@ -194,8 +194,8 @@ Inside the app:
 ## ⚙️ Getting started
 
 ```bash
-git clone git@github.com:POLUX89/Rehab_Strenght_App.git
-cd Rehab_Strenght_App
+git clone git@github.com:POLUX89/rehab-strength.git
+cd rehab-strength
 make setup                 # venv + dependencies + pre-commit hooks
 source .venv/bin/activate
 make app                   # http://localhost:8501
@@ -240,7 +240,7 @@ brew services start sleepwatcher
 
 cat > ~/.wakeup <<'SH'
 #!/bin/zsh
-"$HOME/Documents/Project/Rehab_Strenght_App/scripts/run_pipeline.sh"
+"$HOME/dev/rehab-strength/scripts/run_pipeline.sh"
 SH
 chmod +x ~/.wakeup
 ```
