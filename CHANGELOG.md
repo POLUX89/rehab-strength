@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.8.0] - 2026/07/20
+
+Interpretabilidad **SHAP** para el campeón de cada sub-rama de Models. Regla de
+diseño: SHAP donde aporta — features transformadas o cajas negras. **OLS queda
+excluido a propósito**: statsmodels ya es interpretable de forma nativa
+(coeficientes con p-values, intervalos de confianza y errores robustos HC3);
+SHAP solo re-derivaría lo mismo sin inferencia.
+
+### Added
+- Helper compartido `app/tabs/models/shap_utils.py` (`compute_shap_values`),
+  usado por regresión Y clasificación: árboles aditivos (DT/RF/GB) →
+  `shap.TreeExplainer` (exacto y rápido); el resto (lineales, KNN, SVR/SVM,
+  AdaBoost — no aditivo, TreeExplainer lo rechaza) → `shap.Explainer`
+  model-agnostic sobre la función de predicción, con atribuciones en los
+  predictores **originales** (clave con `PolynomialFeatures`, que expande
+  7 → 36 features). Cacheado con `@st.cache_data`.
+- SHAP en las 6 sub-ramas: Other Linear, Non Linear y Bagging & Boosting
+  (regresión); Logistic Regression, Non Linear y Bagging & Boosting
+  (clasificación). 4 gráficos por sub-rama: force plot de la última muestra,
+  beeswarm, mean |SHAP| bar y waterfall — cada figura con su `plt.close`.
+- Clasificación explica la **probabilidad de "Bad Sleep"**: `predict_proba` en
+  la ruta agnóstica y `model_output="probability"` en TreeExplainer (Gradient
+  Boosting reportaba log-odds). Excepción declarada: si gana SVM se explica el
+  margen (`decision_function`), consistente con `predict`; `probability=True`
+  se descartó (≈5× más lento y sus probabilidades Platt discrepan de las
+  métricas reportadas).
+- Pipeline: los CSV procesados se publican a un outbox de iCloud
+  (`rehab-processed`) tras cada ingesta OK, para subirlos a la app desde el
+  móvil (el repo vive fuera de iCloud y el móvil no lo ve). PR #4.
+
+### Fixed
+- **Colisión de caché** en el helper compartido: todas las sub-ramas usan el
+  mismo split, así que sin llave única una sub-rama mostraba el Explanation de
+  otra (logit llegó a mostrar el margen del SVM como si fuera su probabilidad).
+  `cache_key` ahora es obligatorio y único por sub-rama (+ toggle SMOTE).
+- Force plot en Streamlit: `shap.initjs()` (solo notebooks) tumbaba el import
+  de la app; el JS se embebe con `shap.getjs()` dentro de `components.html`.
+- Learning curve (Non Linear y Ensemble de regresión): la barra promediaba toda
+  la curva — inflada por los tamaños de train pequeños — y no cuadraba con las
+  `st.metric`; ahora muestra el valor convergido del último checkpoint
+  ("Final RMSE").
+- Ensemble de regresión: `max_features="auto"` ya no existe en sklearn 1.8
+  (⅓ del grid de Gradient Boosting caía a `nan` en silencio) → `None`; y se
+  quitó el scaler del pipeline de GB — los árboles son invariantes a escala
+  (verificado: predicciones idénticas) — para que SHAP quede en unidades
+  originales.
+
+### Changed
+- Repo renombrado a **`rehab-strength`** (typo "Strenght" eliminado; GitHub
+  redirige el nombre viejo). Alineado con el subdominio del deploy y el nombre
+  del paquete.
+- `app_version` de la UI a V2.8.0 y `pyproject` a 2.8.0 (estaba rezagado
+  en 2.6.0).
+
+
 ## [2.7.0] - 2026/07/19
 
 Rama **Classification** completa en Models, con sus tres sub-ramas: Logistic

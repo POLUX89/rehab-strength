@@ -1,6 +1,12 @@
-"""Sub-rama 'OLS diagnosis' de Regression (diagnóstico OLS, VIF, residuos, SHAP).
+"""Sub-rama 'OLS diagnosis' de Regression (diagnóstico OLS, VIF, residuos).
 
 Extraída de models/regression sin cambiar la lógica. render(df_model, predictors).
+
+Nota: esta sub-rama NO usa SHAP a propósito. El OLS de statsmodels ajusta sobre
+los predictores originales (sin transformar), así que sus coeficientes con
+p-values, intervalos de confianza y errores robustos HC3 ya son la explicación
+exacta; SHAP solo re-derivaría lo mismo (β·(x−x̄)) sin inferencia. SHAP aplica en
+las demás sub-ramas (features transformadas o cajas negras) vía shap_utils.
 """
 
 from __future__ import annotations
@@ -24,8 +30,8 @@ def render(df_model, predictors):
     """Render the OLS diagnosis sub-branch.
 
     Fits an OLS model and shows regression diagnostics: VIF, residual
-    analysis, heteroskedasticity/specification tests, a learning curve and
-    SHAP.
+    analysis, heteroskedasticity/specification tests and a learning curve.
+    No SHAP by design — see the module docstring.
 
     Args:
         df_model: Model-ready DataFrame of predictors and target.
