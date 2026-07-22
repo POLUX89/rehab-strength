@@ -27,6 +27,9 @@ data/external/*
 *.xls
 *.pdf
 !tests/fixtures/*.csv
+# Synthetic demo-mode data: generated with generic parameters, ZERO real data
+# -- these ARE versioned on purpose (reproducibility + public demo).
+!data/synthetic/*.csv
 
 # Notebooks exploratorios: los outputs contienen datos personales
 notebooks/*.ipynb

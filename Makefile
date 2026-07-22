@@ -1,8 +1,9 @@
-.PHONY: help setup install-dev ingest app test lint format clean check-secrets
+.PHONY: help setup install-dev ingest synthetic app test lint format clean check-secrets
 
 help:
 	@echo "setup         Crea el venv e instala todo para desarrollo"
 	@echo "ingest        Corre el pipeline completo (Sheets + Strong -> data/processed)"
+	@echo "synthetic     Regenerate the synthetic demo data (data/synthetic)"
 	@echo "app           Levanta el dashboard de Streamlit en local"
 	@echo "test          Corre los tests"
 	@echo "lint          Chequea estilo con ruff"
@@ -23,6 +24,9 @@ install-dev:
 
 ingest:
 	python -m rehab_strength.ingest.run_all
+
+synthetic:
+	python -m rehab_strength.synthetic.generate
 
 app:
 	streamlit run streamlit_app.py

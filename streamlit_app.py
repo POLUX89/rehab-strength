@@ -14,6 +14,7 @@ import seaborn as sns
 from matplotlib.ticker import MultipleLocator
 import matplotlib.dates as mdates
 import io
+from pathlib import Path
 from datetime import date
 import statsmodels.api as sm
 import scipy.stats as stats
@@ -78,7 +79,7 @@ from app.tabs import models as models_tab
 st.set_page_config(page_title="Rehab Strength APP", layout="wide")
 st.title("🏋️‍♂️ Rehab Strength APP", text_alignment="center")
 st.caption("Workouts (Strong) • Sleep (Sheets) • Recovery (Sigmoid)")
-app_version = "V2.8.0"
+app_version = "V2.9.0"
 st.caption(f"App Version: {app_version} • Updated: {datetime.now():%Y-%m-%d %H:%M}")
 st.markdown("---")
 
@@ -205,6 +206,32 @@ if st.session_state.show_uploads:
 
         if up_recovery is not None and st.session_state.get("df_recovery") is None:
             st.session_state.df_recovery = normalize_recovery(load_df_from_upload(up_recovery))
+
+    # ---------- demo mode: synthetic data (no real health data) ----------
+    st.caption(
+        "No data at hand? Explore every tab with a **fully synthetic** dataset — "
+        "generated with generic plausible parameters, zero real health data."
+    )
+    if st.button("🧪 Try with synthetic data", key="load_synthetic"):
+        synthetic_dir = Path(__file__).parent / "data" / "synthetic"
+        try:
+            st.session_state.df_workouts = normalize_workouts(
+                pd.read_csv(synthetic_dir / "clean_strong_workouts.csv")
+            )
+            st.session_state.df_sleep = normalize_sleep(
+                pd.read_csv(synthetic_dir / "clean_sleep_data.csv")
+            )
+            st.session_state.df_recovery = normalize_recovery(
+                pd.read_csv(synthetic_dir / "clean_recovery_data.csv")
+            )
+        except FileNotFoundError:
+            st.error(
+                "Synthetic dataset not found. Generate it with: "
+                "`python -m rehab_strength.synthetic.generate`"
+            )
+        else:
+            st.session_state.show_uploads = False
+            st.rerun()
 
 
 # Stop until all 3 are loaded (AFTER the persist step above)

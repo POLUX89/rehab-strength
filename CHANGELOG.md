@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.9.0] - 2026/07/22
+
+**Demo mode with synthetic data** (manual version; SDV will come in a later
+iteration). The app is no longer a locked door: anyone can explore every tab
+without uploading anything.
+
+### Added
+- Manual generator in `src/rehab_strength/synthetic/generate.py`
+  (`make synthetic`): a daily AR(1) latent state induces both temporal
+  autocorrelation (the TSA tab shows real ACF structure, not white noise) and
+  cross-column correlations (stress↑ → score↓). Derived columns (Efficiency,
+  z-scores, Sigmoid, nap scoring) are NOT synthesized: they are recomputed with
+  the ingestion pipeline's own formulas/functions. Workouts come from a
+  rule-based simulator (weekly split, linear progression, deloads). Fixed
+  seed → deterministic CSVs.
+- **Privacy by design**: generator parameters are generic and plausible, NOT
+  fitted to the real data — not even summary statistics of health data touch
+  the repo. `data/synthetic/*.csv` is versioned on purpose (.gitignore
+  exception) for the public demo and reproducibility.
+- **"🧪 Try with synthetic data"** button in the upload panel: loads the 3
+  synthetic CSVs into session_state through the same `normalize_*` path as
+  uploads. Realistic class balance (~27% "Bad Sleep", the minority class).
+- Tests for the generator and its contract with the app (exact schema,
+  formats, physical constraints, determinism, and that the models path keeps
+  ≥50 rows).
+
+### Changed
+- README: demo-mode callout + `data/synthetic/` in the repository layout.
+- UI `app_version` V2.9.0 and `pyproject` 2.9.0.
+
+
 ## [2.8.0] - 2026/07/20
 
 Interpretabilidad **SHAP** para el campeón de cada sub-rama de Models. Regla de

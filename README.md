@@ -11,6 +11,10 @@ A personal analytics dashboard built with **Streamlit** to track **workouts, sle
 
 **▶️ Live app: [rehab-strength.streamlit.app](https://rehab-strength.streamlit.app)**
 
+**🧪 No data? Click "Try with synthetic data" inside the app** — it ships with a
+fully synthetic demo dataset (zero real health data), so every tab, model and
+SHAP plot is explorable in one click.
+
 ## 🎥 Demo
 https://github.com/user-attachments/assets/7041db62-8f85-4449-a515-f1960cbdb90b
 
@@ -170,6 +174,7 @@ Inside the app:
 │       ├── strong.py           # Strong export → clean workouts
 │       └── run_all.py          # Full pipeline
 ├── data/{raw,processed,external}/   # Health data — git-ignored
+├── data/synthetic/             # Synthetic demo dataset — versioned (no real data)
 ├── models/                     # Trained models — git-ignored
 ├── reports/figures/            # Generated plots — git-ignored
 ├── assets/                     # Curated screenshots for this README — versioned
@@ -202,7 +207,9 @@ make app                   # http://localhost:8501
 ```
 
 The dashboard runs on **uploaded CSVs** — no credentials required. Drop your three
-cleaned CSVs into the upload panel and every tab unlocks.
+cleaned CSVs into the upload panel and every tab unlocks. Or skip the uploads
+entirely: **"🧪 Try with synthetic data"** loads the bundled synthetic dataset
+(regenerate it anytime with `make synthetic`).
 
 ### Running the ingestion pipeline (owner only)
 
